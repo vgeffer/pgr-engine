@@ -1,0 +1,132 @@
+#include "game_window.hpp"
+#include "window/video_mode.hpp"
+#include <stdexcept>
+
+game_window::game_window(std::string title, video_mode* mode) {
+        
+    _props.is_closing = false;
+    _props.current_mode = mode;
+    _props.win_title = title;
+
+    if (!glfwInit())
+        throw std::runtime_error("TEST");
+
+    /* Get primary monitor vidmode */
+    const GLFWvidmode* glfw_vidmode = glfwGetVideoMode(glfwGetPrimaryMonitor());    
+    if (glfw_vidmode == NULL)
+            throw std::runtime_error("<GLFW-VIDMODE-ERROR>");
+        
+    /* Resolve VidMode params */
+    int width = _props.current_mode->win_mode == window_mode::BORDERLESS ? glfw_vidmode->width : _props.current_mode->w;
+    int height = _props.current_mode->win_mode == window_mode::BORDERLESS ? glfw_vidmode->height : _props.current_mode->h;
+    _apply_default_hints();
+
+    _props.glfw_handle = glfwCreateWindow(
+        width,
+        height,
+        title.c_str(),
+        _props.current_mode->win_mode != window_mode::WINDOW ? glfwGetPrimaryMonitor() : NULL,
+        NULL
+    );
+
+    if (_props.glfw_handle == NULL)
+        throw std::runtime_error("<ERROR-GLFWCREATEWINDOW>");
+    
+    /* Apply callbacks */
+ 
+
+    if (_props.current_mode->is_vsync)
+        glfwSwapInterval(1);
+        
+
+    glfwMakeContextCurrent(static_cast<GLFWwindow*>(_props.glfw_handle));
+    glfwShowWindow(static_cast<GLFWwindow*>(_props.glfw_handle));
+        
+        //handler = new EventHandler(this);
+}
+
+game_window::~game_window() {
+ 
+    if (!_props.glfw_handle)
+        return;
+    
+    glfwHideWindow(_props.glfw_handle);
+    glfwDestroyWindow(_props.glfw_handle);
+    glfwTerminate();
+}
+
+void game_window::update_vidmode() {
+
+    if (_props.glfw_handle == NULL) 
+        throw std::logic_error("GLFW window not initialised!");
+    
+    /* Disable VSync */
+    glfwSwapInterval(0);
+
+    /* Hide & destroy the window */
+    glfwHideWindow(_props.glfw_handle);
+    glfwDestroyWindow(_props.glfw_handle);
+
+    /* Re-create window */
+    const GLFWvidmode* glfw_vidmode = glfwGetVideoMode(glfwGetPrimaryMonitor());
+    if (glfw_vidmode == NULL)
+        throw std::runtime_error("Changing vidmode failed!");
+    
+    int width = _props.current_mode->win_mode == window_mode::BORDERLESS ? glfw_vidmode->width : _props.current_mode->w;
+    int height = _props.current_mode->win_mode == window_mode::BORDERLESS ? glfw_vidmode->height : _props.current_mode->h;
+    
+    glfwDefaultWindowHints();
+    _apply_default_hints();
+    _props.glfw_handle = glfwCreateWindow(
+            width,
+            height,
+            _props.win_title.c_str(),
+            _props.current_mode->win_mode != window_mode::WINDOW ? glfwGetPrimaryMonitor() : NULL,
+            NULL
+    );
+
+    if (_props.glfw_handle == NULL)
+        throw std::runtime_error("<ERROR-GLFWCREATEWINDOW>");
+
+    /* Set callbacks */
+    //applyCallbacks();
+    if (_props.current_mode->is_vsync)
+        glfwSwapInterval(1);
+    
+    glfwMakeContextCurrent(_props.glfw_handle);
+    glfwShowWindow(_props.glfw_handle);
+}
+
+    /**
+     * applyWindowHints() - Sets appropriate window properties
+     */
+    private void applyWindowHints() {
+
+        /* Done this way since they are applied in multiple places */
+        glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
+        glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4); 
+        glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+        glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+        glfwWindowHint(GLFW_SAMPLES, currentVidMode.msaaLevel);
+    }
+
+    /**
+     * applyCallbacks() - Applies currently set callbacks
+     */
+    private void applyCallbacks() {
+
+        glfwFreeCallbacks(winHandle);
+        if (kbdKeyCallback != null) 
+            glfwSetKeyCallback(winHandle, kbdKeyCallback);
+
+        if (kbdCharCallback != null)
+            glfwSetCharCallback(winHandle, kbdCharCallback);
+        
+        if (mbuttonCallback != null)
+            glfwSetMouseButtonCallback(winHandle, mbuttonCallback);
+        
+        if (mmoveCallback != null) 
+            glfwSetCursorPosCallback(winHandle, mmoveCallback);
+        
+    }
+}
