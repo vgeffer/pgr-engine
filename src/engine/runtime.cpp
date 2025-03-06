@@ -1,4 +1,5 @@
 #include "runtime.hpp"
+#include "events.hpp"
 #include "nodes/scene_node.hpp"
 #include "rendering/renderer.hpp"
 
@@ -14,6 +15,9 @@ using namespace std::chrono;
 
 engine_runtime::engine_runtime(game_window* window) 
     : _window(window) {
+
+    _events = new events();
+    _events->apply_callbacks(window);
 
     _renderer = new renderer();
     _instance = this;
@@ -43,7 +47,7 @@ void engine_runtime::start() {
     /* Mainloop */
     while (!_window->props().is_closing) {
         
-        glfwPollEvents();
+        _events->process_frame();
 
         /* Calculate time elapsed since last frame */
         tp_now = steady_clock::now();

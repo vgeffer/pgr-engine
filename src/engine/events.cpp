@@ -1,130 +1,129 @@
 #include "events.hpp"
 #include "game_window.hpp"
 #include "window/key_code.hpp"
+#include <GLFW/glfw3.h>
+#include <cstdint>
+#include <glm/fwd.hpp>
+#include <stdexcept>
+#include <sys/types.h>
     
 
-events::events(game_window& win) {
-    public void setDefaultCallbacks(EventHandler e) {
-        e.addKeyCallback(2, (int key, int action, EventHandler caller) -> {
-                         
-             if (action == GLFW_PRESS) 
-                 keyStates.put(key, DOWN);
-             
-             if (action == GLFW_RELEASE)
-                 keyStates.put(key, UP);
-         });
-   
-         e.addButtonCallback(2, (int button, int action, EventHandler caller) -> {
-             
-             if (action == GLFW_PRESS)
-                 mouseStates.put(button, DOWN);
-             
-             if (action == GLFW_RELEASE)
-                 mouseStates.put(button, UP);
-         });
-   
-         e.addMoveCallback(2, (double posX, double posY, EventHandler caller) -> {
-         
-             cursorPos = new V2f((float)posX, (float)posY);
-         });
-     }
-     
+using namespace std;
+
+/* Helper directives for prettier code, mainly for static functions */
+#define CURRENT_BUFFER (_instance->_current_buffer)
+#define LAST_BUFFER (_instance->_current_buffer ^ 1)
+#define GET_KEY(buffer, keycode) (_instance->_key_buffer[buffer][(uint16_t)keycode >> 3] & (1 << ((uint16_t)keycode & 0b0111)))
+#define GET_BUTTON(buffer, button) (_instance->_mouse_button_buffer[buffer] & (1 << ((uint8_t)button & 0b0111)))
+
+events::events() {
+    _instance = this;
+}
+
+void events::apply_callbacks(game_window* window) {
+
+    glfwSetMouseButtonCallback(window->props().glfw_handle, [](GLFWwindow* window, int button, int action, int mods) {
+        
+        if (!_instance)
+            throw std::logic_error("Event handler not initialised");
+        
+        /* Since this app is strictly single-window, info about it can be safely ignored */
+        if (action == GLFW_PRESS)
+            _instance->_mouse_button_buffer[_instance->_current_buffer] |= (1 << ((uint8_t)button & 0b0111));
+        else if (action == GLFW_RELEASE)
+            _instance->_mouse_button_buffer[_instance->_current_buffer] &= ~(1 << ((uint8_t)button & 0b0111));
+    });
+
+    glfwSetKeyCallback(window->props().glfw_handle, [](GLFWwindow* window, int key, int scancode, int action, int mods) {
+
+        if (!_instance)
+            throw std::logic_error("Event handler not initialised");
+
+        /* Since this app is strictly single-window, info about it can be safely ignored */
+        if (action == GLFW_PRESS)
+            _instance->_key_buffer[_instance->_current_buffer][((uint16_t)key >> 3)] |= (1 << ((uint8_t)key & 0b0111));
+        else if (action == GLFW_RELEASE)
+            _instance->_key_buffer[_instance->_current_buffer][((uint16_t)key >> 3)] &= ~(1 << ((uint8_t)key & 0b0111));
+    });
+
+    glfwSetCursorPosCallback(window->props().glfw_handle, [](GLFWwindow* window, double x, double y) {
+       
+        if (!_instance)
+            throw std::logic_error("Event handler not initialised");
+
+        /* Since this app is strictly single-window, info about it can be safely ignored */
+        _instance->_mouse_pos_buffer[_instance->_current_buffer].x = static_cast<float>(x);
+        _instance->_mouse_pos_buffer[_instance->_current_buffer].y = static_cast<float>(y);
+    });
 }
 
 void events::process_frame() {
-    prevCursorPos = cursorPos;
-        
-    for (int keyCode : keyStates.keySet()) {
-        if (keyStates.get(keyCode) == DOWN) 
-            keyStates.put(keyCode, HELD_DOWN);
 
-        if (keyStates.get(keyCode) == UP)
-            keyStates.put(keyCode, HELD_UP);
-    }
-
-    for (int button : mouseStates.keySet()) {
-        if (mouseStates.get(button) == DOWN) 
-            mouseStates.put(button, HELD_DOWN);
-
-        if (mouseStates.get(button) == UP)
-            mouseStates.put(button, HELD_UP);
-    }
-
+    /* Swap buffers */
+    _current_buffer = (_current_buffer + 1) % 2; 
+    glfwPollEvents();
 }
 
-static bool events::is_key_pressed(key_code key) {        
+bool events::is_key_pressed(key_code key) {        
         
-    if (!keyStates.containsKey(keyCode.getKeyCode()))
-        return false;
-    
-    return keyStates.get(keyCode.getKeyCode()) == DOWN; 
+    if (!_instance)
+        throw std::logic_error("Event handler not initialised");
+
+    return GET_KEY(CURRENT_BUFFER, key) && !GET_KEY(LAST_BUFFER, key);
 }
     
-static bool events::is_key_held(key_code key) {
+bool events::is_key_held(key_code key) {
         
-    /* Key has never been pressed */
-    if (!keyStates.containsKey(keyCode.getKeyCode()))
-        return false;
-        
-    return keyStates.get(keyCode.getKeyCode()) == HELD_DOWN; 
+    if (!_instance)
+        throw std::logic_error("Event handler not initialised");
+
+    return GET_KEY(CURRENT_BUFFER, key) && GET_KEY(LAST_BUFFER, key);
 }
 
-static bool events::is_key_released(key_code key) {
+bool events::is_key_released(key_code key) {
     
-    /* Key has never been pressed */
-    if (!keyStates.containsKey(keyCode.getKeyCode()))
-        return false;
-    
-    return keyStates.get(keyCode.getKeyCode()) == UP; 
+    if (!_instance)
+        throw std::logic_error("Event handler not initialised");
+
+    return !GET_KEY(CURRENT_BUFFER, key);
 }
     
-    /**
-     * Returns if the mouse button has been pressed (only occurs on the first frame of the button being pressed)
-     * @param button Button we're checking for
-     * @return Is button pressed
-     */  
-    public boolean isMouseButtonPressed(Mouse button) {
-        
-        /* Key has never been pressed */
-        if (!mouseStates.containsKey(button.getButtonCode()))
-            return false;
-        
-        return mouseStates.get(button.getButtonCode()) == DOWN; 
-    }
-    
-    /**
-     * Returns if the mouse button has been held down (occurs from the second frame of the button being pressed)
-     * @param button Button code we're checking for
-     * @return Is button held down
-     */    
-    public boolean isMouseButtonHeldDown(Mouse button) {
-        
-        /* Key has never been pressed */
-        if (!mouseStates.containsKey(button.getButtonCode()))
-            return false;
-            
-        return mouseStates.get(button.getButtonCode()) == HELD_DOWN; 
-    }
-    
-     /**
-     * Returns if the button has been released (only occurs on the first frame of the button being released)
-     * @param button Button code we're checking for
-     * @return Is button released
-     */  
-    public boolean isMouseButtonReleased(Mouse button) {
-        
-        /* Key has never been pressed */
-        if (!mouseStates.containsKey(button.getButtonCode()))
-            return false;
-        
-        return mouseStates.get(button.getButtonCode()) == UP; 
-    }
-    
-    public V2f getMousePos() {
-        return cursorPos;
-    }
-    
-    public V2f getMouseDelta() {
-        return V2f.sub(cursorPos, prevCursorPos);
-    }
+bool events::is_mouse_pressed(mouse_code button) {
+
+    if (!_instance)
+        throw std::logic_error("Event handler not initialised");
+
+    return GET_BUTTON(CURRENT_BUFFER, button) && !GET_BUTTON(LAST_BUFFER, button);
+}
+
+bool events::is_mouse_held(mouse_code button) {
+
+    if (!_instance)
+        throw std::logic_error("Event handler not initialised");
+
+    return GET_BUTTON(CURRENT_BUFFER, button) && GET_BUTTON(LAST_BUFFER, button);
+}
+
+bool events::is_mouse_released(mouse_code button) {
+
+    if (!_instance)
+        throw std::logic_error("Event handler not initialised");
+
+    return !GET_BUTTON(CURRENT_BUFFER, button);
+}
+
+glm::vec2 events::mouse_pos() {
+
+    if (!_instance)
+        throw std::logic_error("Event handler not initialised");
+
+    return _instance->_mouse_pos_buffer[CURRENT_BUFFER];
+}
+
+glm::vec2 events::mouse_delta() {
+
+    if (!_instance)
+        throw std::logic_error("Event handler not initialised");
+
+    return _instance->_mouse_pos_buffer[CURRENT_BUFFER] - _instance->_mouse_pos_buffer[LAST_BUFFER];
 }
