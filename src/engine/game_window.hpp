@@ -1,3 +1,8 @@
+///
+/// @file game_window.hpp
+/// @author geffevil
+///
+
 #pragma once
 #include "window/video_mode.hpp"
 #include <GLFW/glfw3.h>
@@ -21,11 +26,9 @@ class game_window {
         void toggle_block_cursor();  
         void close();
 
-
         win_props_t& props();
 
     private:
         win_props_t _props;
         void _apply_default_hints();
-        void _bind_callbacks();
 };

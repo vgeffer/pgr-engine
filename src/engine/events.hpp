@@ -1,3 +1,7 @@
+///
+/// @file events.hpp
+/// @author geffevil
+///
 #pragma once
 #include "game_window.hpp"
 #include "window/key_code.hpp"
@@ -7,11 +11,10 @@
 class events {
  
     public:
-        events();
+        explicit events();
         void process_frame();
         void apply_callbacks(game_window* window);
         
-
         static bool is_key_pressed(key_code key);
         static bool is_key_held(key_code key);
         static bool is_key_released(key_code key);

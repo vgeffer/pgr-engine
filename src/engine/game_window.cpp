@@ -30,19 +30,14 @@ game_window::game_window(std::string title, video_mode* mode) {
     );
 
     if (_props.glfw_handle == NULL)
-        throw std::runtime_error("<ERROR-GLFWCREATEWINDOW>");
+        throw std::runtime_error("<ERROR->");
     
     /* Apply callbacks */
- 
-
     if (_props.current_mode->is_vsync)
         glfwSwapInterval(1);
         
-
     glfwMakeContextCurrent(static_cast<GLFWwindow*>(_props.glfw_handle));
     glfwShowWindow(static_cast<GLFWwindow*>(_props.glfw_handle));
-        
-        //handler = new EventHandler(this);
 }
 
 game_window::~game_window() {
@@ -97,36 +92,12 @@ void game_window::update_vidmode() {
     glfwShowWindow(_props.glfw_handle);
 }
 
-    /**
-     * applyWindowHints() - Sets appropriate window properties
-     */
-    private void applyWindowHints() {
+void game_window::_apply_default_hints() {
 
-        /* Done this way since they are applied in multiple places */
-        glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
-        glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4); 
-        glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
-        glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-        glfwWindowHint(GLFW_SAMPLES, currentVidMode.msaaLevel);
-    }
-
-    /**
-     * applyCallbacks() - Applies currently set callbacks
-     */
-    private void applyCallbacks() {
-
-        glfwFreeCallbacks(winHandle);
-        if (kbdKeyCallback != null) 
-            glfwSetKeyCallback(winHandle, kbdKeyCallback);
-
-        if (kbdCharCallback != null)
-            glfwSetCharCallback(winHandle, kbdCharCallback);
-        
-        if (mbuttonCallback != null)
-            glfwSetMouseButtonCallback(winHandle, mbuttonCallback);
-        
-        if (mmoveCallback != null) 
-            glfwSetCursorPosCallback(winHandle, mmoveCallback);
-        
-    }
+    /* Done this way since they are applied in multiple places */
+    glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4); 
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+    glfwWindowHint(GLFW_SAMPLES, (int)_props.current_mode->antialias);
 }
