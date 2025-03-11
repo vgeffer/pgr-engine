@@ -3,7 +3,7 @@
 
 #define PERSISTENT_CAHCE_PATH "./.cache"
 
-namespace core {
+namespace utils {
     class cache {
 
         public:

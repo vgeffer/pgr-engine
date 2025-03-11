@@ -58,7 +58,7 @@ enum class key_code : uint16_t {
     esc = GLFW_KEY_ESCAPE
 };
 
-enum class mouse_codes : uint16_t {
+enum class mouse_code : uint16_t {
     right_button = GLFW_MOUSE_BUTTON_RIGHT,
     left_button = GLFW_MOUSE_BUTTON_LEFT,
     middle_button = GLFW_MOUSE_BUTTON_MIDDLE
