@@ -1,7 +1,9 @@
 #include "runtime.hpp"
 #include "events.hpp"
 #include "nodes/scene_node.hpp"
+#include "physics/physics.hpp"
 #include "rendering/renderer.hpp"
+#include "utils/global_settings.hpp"
 
 #include <GLFW/glfw3.h>
 #include <chrono>
@@ -10,6 +12,8 @@
 
 using namespace std;
 using namespace nodes;
+using namespace utils;
+using namespace physics;
 using namespace rendering;
 using namespace std::chrono;
 
@@ -20,6 +24,7 @@ engine_runtime::engine_runtime(game_window* window)
     _events->apply_callbacks(window);
 
     _renderer = new renderer();
+    _physics = new physics_engine();
     _instance = this;
 };
     
@@ -34,15 +39,9 @@ void engine_runtime::start() {
                              tp_now;
 
     float physics_delta = 0;
+    float physics_interval = global_settings::physics_interval();
 
-    glEnable(GL_CULL_FACE);
-    glEnable(GL_DEPTH_TEST);
-        
-    /* Setup backface culling */
-    glFrontFace(GL_CCW);
-    glCullFace(GL_BACK);
-    glDepthFunc(GL_LESS);
-    glClearColor(0.3f, 0.3f, 0.3f, 1.0f);
+    /* TODO: Check if main camera is bound. If not... create one */
 
     /* Mainloop */
     while (!_window->props().is_closing) {
@@ -58,7 +57,7 @@ void engine_runtime::start() {
 
         /* Physics */
         while (physics_delta >= physics_interval) {
-            /* TODO: physics_update */
+            _physics->tick(physics_interval);
             physics_delta -= physics_interval;
         }
 
@@ -71,7 +70,9 @@ void engine_runtime::start() {
                 bfs_queue.pop_front();
                 continue; /* Do not update self and children*/
             }
-            current->update(elapsed);
+
+            /* Lerp on positions */
+            current->node_update(elapsed);
 
             /* Append children to queue*/
             if (current->children().size() > 0)
@@ -86,34 +87,30 @@ void engine_runtime::start() {
 
         /* Clear buffers */
         glfwSwapBuffers(_window->props().glfw_handle);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        /* Render */
-        _renderer->draw_scene(_root_node);
-
-        /* Postprocess - if enabled */
+        /* Render & postprocess */
+        _renderer->draw_scene(*_main_camera);
     }
     
     /* Delete OpenGL objects */
     _teardown();
 }
 
-scene_node* engine_runtime::root_node() const {
-    return _root_node;
-}
+scene_node* engine_runtime::root_node(scene_node* root) {
 
-game_window* engine_runtime::window() const {
-    return _window;
-}
+    /* Let renderer process the scene */
+    _renderer->load_scene(root);
 
-scene_node* engine_runtime::root_node(scene_node* node) {
+    /* Recompute Bounding Volume Hierarchy for new scene */
+    _physics->recompute_bv_hierarchy(root);
 
-    /* TODO: update renderer's info about static objects */
-    return _root_node = node;
+    return _root_node = root;
 }
     
 void engine_runtime::_teardown() {
-          
 
+    /* Delete current scene */
+
+    delete _events;
     delete _renderer;
 }
