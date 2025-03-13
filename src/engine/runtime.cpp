@@ -3,12 +3,13 @@
 #include "nodes/scene_node.hpp"
 #include "physics/physics.hpp"
 #include "rendering/renderer.hpp"
-#include "utils/global_settings.hpp"
+#include "utils/project_settings.hpp"
 
 #include <GLFW/glfw3.h>
 #include <chrono>
 #include <deque>
 #include <iterator>
+#include <memory>
 
 using namespace std;
 using namespace nodes;
@@ -17,14 +18,14 @@ using namespace physics;
 using namespace rendering;
 using namespace std::chrono;
 
-engine_runtime::engine_runtime(game_window* window) 
+engine_runtime::engine_runtime(game_window& window) 
     : _window(window) {
 
-    _events = new events();
-    _events->apply_callbacks(window);
+    _events = make_unique<events>();
+    _renderer = make_unique<renderer>();
+    _physics = make_unique<physics_engine>();
 
-    _renderer = new renderer();
-    _physics = new physics_engine();
+    _events->apply_callbacks(window);
     _instance = this;
 };
     
@@ -39,12 +40,12 @@ void engine_runtime::start() {
                              tp_now;
 
     float physics_delta = 0;
-    float physics_interval = global_settings::physics_interval();
+    float physics_interval = project_settings::physics_interval();
 
     /* TODO: Check if main camera is bound. If not... create one */
 
     /* Mainloop */
-    while (!_window->props().is_closing) {
+    while (!_window.props().is_closing) {
         
         _events->process_frame();
 
@@ -86,7 +87,7 @@ void engine_runtime::start() {
         }
 
         /* Clear buffers */
-        glfwSwapBuffers(_window->props().glfw_handle);
+        glfwSwapBuffers(_window.props().glfw_handle);
 
         /* Render & postprocess */
         _renderer->draw_scene(*_main_camera);
@@ -110,7 +111,4 @@ scene_node* engine_runtime::root_node(scene_node* root) {
 void engine_runtime::_teardown() {
 
     /* Delete current scene */
-
-    delete _events;
-    delete _renderer;
 }

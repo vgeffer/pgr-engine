@@ -13,7 +13,7 @@ class events {
     public:
         explicit events();
         void process_frame();
-        void apply_callbacks(game_window* window);
+        void apply_callbacks(game_window& window);
         
         static bool is_key_pressed(key_code key);
         static bool is_key_held(key_code key);
@@ -31,7 +31,7 @@ class events {
         
         uint8_t _current_buffer = 0;
 
-        std::array<uint8_t, 1 << 13> _key_buffer[2];
-        uint8_t _mouse_button_buffer[2];
-        glm::vec2 _mouse_pos_buffer[2];
+        std::array<std::array<uint8_t, 8192>, 2> _key_buffer;
+        std::array<uint8_t, 2> _mouse_button_buffer;
+        std::array<glm::vec2, 2> _mouse_pos_buffer;
 };
