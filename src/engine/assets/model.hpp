@@ -3,13 +3,10 @@
 #include <string>
 
 namespace assets {
-    class model : public rendering::mesh {
+    class model : public asset, public rendering::mesh {
        
         public:
-            model(std::string path);
-            ~model();
-        
-        private:
-            
+            explicit model(std::string path);
+            ~model() = default;
     };
 }

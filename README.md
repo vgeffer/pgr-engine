@@ -10,7 +10,8 @@ This repository contains an implementation of a semestral assignment from the PG
 - ```glfw``` >= 3.3
 - ```freetype2``` >= 2.11
 - ```opengl``` >= 4.3 *(glad loader is provided with the project)*
- 
+- ```assimp``` >= 5.4
+
 ## Acknowledgements
 This project uses and redistributes [```stb_image.h```](https://github.com/nothings/stb/blob/master/stb_image.h), a part of the [stb libraries](https://github.com/nothings/stb/) <br />
 Copyright (c) 2017 Sean Barrett

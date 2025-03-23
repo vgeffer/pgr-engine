@@ -1,145 +1,87 @@
 #include "model.hpp"
+#include <assimp/mesh.h>
+#include <glm/fwd.hpp>
 #include <glm/glm.hpp>
+#include <stdexcept>
 #include <string>
+#include <assimp/Importer.hpp>
+#include <assimp/scene.h>
+#include <assimp/postprocess.h>
+#include <vector>
 
 using namespace glm;
 using namespace std;
 using namespace assets;
+using namespace rendering;
 
-model::model(string path) {    
+model::model(string path) 
+    : mesh() {    
 
-        
-    /* Load the model as Assimp scene */
-    AIScene scene = aiImportFile(
-            join(getCwd(), "meshes", fileName), 0
+    /* TODO: Down the line, replace with custom loader */
+    Assimp::Importer importer;
+    const aiScene* scene = importer.ReadFile(path.c_str(),
+        aiProcess_Triangulate |
+        aiProcess_CalcTangentSpace |
+        aiProcess_GenNormals
     );
-    if (scene == null)
-        throw new ModelLoadingError("<ASSIMP-LOAD-ERROR>");
+
+    if (!scene || scene->mNumMeshes <= 0)
+        throw runtime_error("Failed to load the model " + path);
+
+    /* Grab the 0th mesh */
+    const aiMesh* mesh = scene->mMeshes[0];
+
+
+   /* Bind mesh's VAO */
+   glBindVertexArray(attr_buffer);
+
+    vector<mesh::vertex_t> vertices;
+    vertices.reserve(mesh->mNumVertices);
+    for (size_t i = 0; i < mesh->mNumVertices; i++) {
+
+        /* Hopefully -O2 will do it's job */
+        vertex_t v = {
+            .vertex = glm::vec3(mesh->mVertices[i].x, mesh->mVertices[i].y, mesh->mVertices[i].z),
+            .normal = glm::vec3(mesh->mNormals[i].x, mesh->mNormals[i].y, mesh->mNormals[i].z),
+            .uv = glm::vec2(mesh->mTextureCoords[i][0].x, mesh->mTextureCoords[i][0].y)
+        };
+        vertices.push_back(v);
+    }
+    el_count = vertices.size();
+
+    /* Push vertices to GPU */
+    glBindBuffer(GL_ARRAY_BUFFER, vertex_buffer);
+    glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(vertices[0]), vertices.data(), GL_STATIC_DRAW);
+
+    if (mesh->HasFaces()) {
+
+        vector<int> indices;
+        for (size_t i = 0; i < mesh->mNumFaces; i++) {
+
+            const aiFace* face = mesh->mFaces;
+            
+            for (size_t e = 0; e < face->mNumIndices; i++)
+                indices.push_back(face->mIndices[e]);            
+        }
+
+         /* Indices */
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, index_buffer);
+        glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices.size() * sizeof(indices[0]), indices.data(), GL_STATIC_DRAW);
+        el_count = indices.size();
+    }
+
+    /* TODO: Setup & enable arrays */
+    glVertexAttribPointer(0, 3, GL_FLOAT, false, 0, 0);
+    glVertexAttribPointer(1, 3, GL_FLOAT, false, 12, 0);
+    glVertexAttribPointer(2, 2, GL_FLOAT, false, 24, 0);
     
-    /* Since we should import only one mesh... ignore the rest */
-    PointerBuffer meshes = scene.mMeshes();
-    loadMesh(AIMesh.create(meshes.get(0)));
+    glEnableVertexAttribArray(0);
+    glEnableVertexAttribArray(1);
+    glEnableVertexAttribArray(2);
+    
+    /* Unbind anything still bound */
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    glBindVertexArray(0);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);    
 }
-
-
-    public void draw() {
-        
-        glBindVertexArray(meshVAO);
-        glDrawElements(GL_TRIANGLES, elementsCount, GL_UNSIGNED_INT, 0);
-        glBindVertexArray(0);
-   }
-
-    /**
-     * destroy() - Destroys OGL objects used by the model
-     */
-    public void destroy() {
-        
-        /* Free up device memory */
-        glDeleteBuffers(meshTexCoordBuffer);
-        glDeleteBuffers(meshVertexBuffer);
-        glDeleteBuffers(meshIndexBuffer);
-        glDeleteBuffers(meshTexBuffer);
-        glDeleteVertexArrays(meshVAO);
-    }
     
-    /**
-     * vertices() - Builds an array of vectors from the list of coords
-     * @return Array of model's vertices
-     */
-    public V3f[] vertices() {
-         
-        V3f[] outVerts = new V3f[this.vertices.size() / 3];
-        for (int i = 0; i < this.vertices.size() / 3; i++) 
-            outVerts[i] = new V3f(
-                    this.vertices.get(i * 3 + 0),
-                    this.vertices.get(i * 3 + 1),
-                    this.vertices.get(i * 3 + 2)
-            );
-        
-        return outVerts;
-    }
-    
-    /**
-     * loadMesh(AIMesh) - Parses the Assimp model object to OGL buffers
-     * @param mesh Assimp mesh object
-     */
-    private void loadMesh(AIMesh mesh) {
-        
-        /* Init buffers */
-        meshTexCoordBuffer = glGenBuffers();
-        meshVertexBuffer = glGenBuffers();
-        meshIndexBuffer = glGenBuffers();
-        meshTexBuffer = glGenBuffers();
-        meshVAO = glGenVertexArrays();
-        
-        
-        /* Load vertices */
-        vertices = new ArrayList<>();
-        AIVector3D.Buffer vertBuffer = mesh.mVertices();
-        
-        /* Parse to OGL format */
-        while (vertBuffer.remaining() > 0) {
-            AIVector3D vertex = vertBuffer.get();
-            vertices.add(vertex.x());
-            vertices.add(vertex.y());
-            vertices.add(vertex.z());
-        }
-    
-        /* Load indices */
-        List<Integer> indices = new ArrayList<>();
-        AIFace.Buffer faceBuffer = mesh.mFaces();
-        
-        while (faceBuffer.remaining() > 0) {
-            
-            AIFace face = faceBuffer.get();
-            elementsCount += face.mNumIndices();
-            
-            IntBuffer indBuffer = face.mIndices();
-            while (indBuffer.remaining() > 0)
-                indices.add(indBuffer.get());            
-        }
-        
-        /* TexCoords */
-        List<Float> texCoords = new ArrayList<>();
-        AIVector3D.Buffer texCoordBuffer = mesh.mTextureCoords(0);
-        
-        /* No texrure coords with the model */
-        if (texCoordBuffer == null)
-            return; /*THROW*/
-        
-        while (texCoordBuffer.remaining() > 0) {
-            
-            AIVector3D texCoord = texCoordBuffer.get();
-            texCoords.add(texCoord.x());
-            texCoords.add(1-texCoord.y());
-        }
-
-        /* Assign to OGL objects */
-        glBindVertexArray(meshVAO);
-        
-        /* Vertices */
-        glBindBuffer(GL_ARRAY_BUFFER, meshVertexBuffer);
-        glBufferData(GL_ARRAY_BUFFER, toFloatArray(vertices), GL_STATIC_DRAW); /* It is wildy inefficient... but who cares */
-        glVertexAttribPointer(0, 3, GL_FLOAT, false, 0, 0);
-        glBindBuffer(GL_ARRAY_BUFFER, 0);
-        
-        /* Texture Coordinates */
-        glBindBuffer(GL_ARRAY_BUFFER, meshTexCoordBuffer);
-        glBufferData(GL_ARRAY_BUFFER, toFloatArray(texCoords), GL_STATIC_DRAW);
-        glVertexAttribPointer(1, 2,  GL_FLOAT, false, 0, 0);
-        glBindBuffer(GL_ARRAY_BUFFER, 0);
-                
-        /* Indices */
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, meshIndexBuffer);
-        glBufferData(GL_ELEMENT_ARRAY_BUFFER, toIntArray(indices), GL_STATIC_DRAW);
-
-        /* Enable both arrays to be passed to shader */
-        glEnableVertexAttribArray(0);
-        glEnableVertexAttribArray(1);        
-        
-        /* Unbind anything still bound */
-        glBindBuffer(GL_ARRAY_BUFFER, 0);
-        glBindVertexArray(0);
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-    }
-}
