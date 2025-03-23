@@ -27,7 +27,7 @@ class events {
         static glm::vec2 mouse_delta();
     
     private:
-        static events* _instance;
+        inline static events* _instance = nullptr;
         
         uint8_t _current_buffer = 0;
 

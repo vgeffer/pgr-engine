@@ -2,11 +2,8 @@
 #include "window/video_mode.hpp"
 #include <stdexcept>
 
-game_window::game_window(std::string title, video_mode* mode) {
-        
-    _props.is_closing = false;
-    _props.current_mode = mode;
-    _props.win_title = title;
+game_window::game_window(std::string title, video_mode& mode) 
+    : _props({.is_closing = false, .win_title = title, .current_mode = mode}) {
 
     if (!glfwInit())
         throw std::runtime_error("TEST");
@@ -17,15 +14,15 @@ game_window::game_window(std::string title, video_mode* mode) {
             throw std::runtime_error("<GLFW-VIDMODE-ERROR>");
         
     /* Resolve VidMode params */
-    int width = _props.current_mode->win_mode == window_mode::BORDERLESS ? glfw_vidmode->width : _props.current_mode->w;
-    int height = _props.current_mode->win_mode == window_mode::BORDERLESS ? glfw_vidmode->height : _props.current_mode->h;
+    int width = _props.current_mode.win_mode == window_mode::BORDERLESS ? glfw_vidmode->width : _props.current_mode.w;
+    int height = _props.current_mode.win_mode == window_mode::BORDERLESS ? glfw_vidmode->height : _props.current_mode.h;
     _apply_default_hints();
 
     _props.glfw_handle = glfwCreateWindow(
         width,
         height,
         title.c_str(),
-        _props.current_mode->win_mode != window_mode::WINDOW ? glfwGetPrimaryMonitor() : NULL,
+        _props.current_mode.win_mode != window_mode::WINDOW ? glfwGetPrimaryMonitor() : NULL,
         NULL
     );
 
@@ -33,7 +30,7 @@ game_window::game_window(std::string title, video_mode* mode) {
         throw std::runtime_error("<ERROR->");
     
     /* Apply callbacks */
-    if (_props.current_mode->is_vsync)
+    if (_props.current_mode.is_vsync)
         glfwSwapInterval(1);
         
     glfwMakeContextCurrent(static_cast<GLFWwindow*>(_props.glfw_handle));
@@ -67,8 +64,8 @@ void game_window::update_vidmode() {
     if (glfw_vidmode == NULL)
         throw std::runtime_error("Changing vidmode failed!");
     
-    int width = _props.current_mode->win_mode == window_mode::BORDERLESS ? glfw_vidmode->width : _props.current_mode->w;
-    int height = _props.current_mode->win_mode == window_mode::BORDERLESS ? glfw_vidmode->height : _props.current_mode->h;
+    int width = _props.current_mode.win_mode == window_mode::BORDERLESS ? glfw_vidmode->width : _props.current_mode.w;
+    int height = _props.current_mode.win_mode == window_mode::BORDERLESS ? glfw_vidmode->height : _props.current_mode.h;
     
     glfwDefaultWindowHints();
     _apply_default_hints();
@@ -76,7 +73,7 @@ void game_window::update_vidmode() {
             width,
             height,
             _props.win_title.c_str(),
-            _props.current_mode->win_mode != window_mode::WINDOW ? glfwGetPrimaryMonitor() : NULL,
+            _props.current_mode.win_mode != window_mode::WINDOW ? glfwGetPrimaryMonitor() : NULL,
             NULL
     );
 
@@ -85,7 +82,7 @@ void game_window::update_vidmode() {
 
     /* Set callbacks */
     //applyCallbacks();
-    if (_props.current_mode->is_vsync)
+    if (_props.current_mode.is_vsync)
         glfwSwapInterval(1);
     
     glfwMakeContextCurrent(_props.glfw_handle);
@@ -99,5 +96,5 @@ void game_window::_apply_default_hints() {
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4); 
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-    glfwWindowHint(GLFW_SAMPLES, (int)_props.current_mode->antialias);
+    glfwWindowHint(GLFW_SAMPLES, (int)_props.current_mode.antialias);
 }

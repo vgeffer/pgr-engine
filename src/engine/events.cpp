@@ -20,9 +20,9 @@ events::events() {
     _instance = this;
 }
 
-void events::apply_callbacks(game_window* window) {
+void events::apply_callbacks(game_window& window) {
 
-    glfwSetMouseButtonCallback(window->props().glfw_handle, [](GLFWwindow* window, int button, int action, int mods) {
+    glfwSetMouseButtonCallback(window.props().glfw_handle, [](GLFWwindow* window, int button, int action, int mods) {
         
         if (!_instance)
             throw std::logic_error("Event handler not initialised");
@@ -34,7 +34,7 @@ void events::apply_callbacks(game_window* window) {
             _instance->_mouse_button_buffer[_instance->_current_buffer] &= ~(1 << ((uint8_t)button & 0b0111));
     });
 
-    glfwSetKeyCallback(window->props().glfw_handle, [](GLFWwindow* window, int key, int scancode, int action, int mods) {
+    glfwSetKeyCallback(window.props().glfw_handle, [](GLFWwindow* window, int key, int scancode, int action, int mods) {
 
         if (!_instance)
             throw std::logic_error("Event handler not initialised");
@@ -46,7 +46,7 @@ void events::apply_callbacks(game_window* window) {
             _instance->_key_buffer[_instance->_current_buffer][((uint16_t)key >> 3)] &= ~(1 << ((uint8_t)key & 0b0111));
     });
 
-    glfwSetCursorPosCallback(window->props().glfw_handle, [](GLFWwindow* window, double x, double y) {
+    glfwSetCursorPosCallback(window.props().glfw_handle, [](GLFWwindow* window, double x, double y) {
        
         if (!_instance)
             throw std::logic_error("Event handler not initialised");

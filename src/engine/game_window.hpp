@@ -12,7 +12,7 @@ typedef struct {
 
     bool is_closing;
     std::string win_title;
-    video_mode* current_mode;
+    video_mode current_mode;
     GLFWwindow* glfw_handle;
 
 } win_props_t;
@@ -20,13 +20,13 @@ typedef struct {
 class game_window {
 
     public:  
-        game_window(std::string title, video_mode* mode);
+        game_window(std::string title, video_mode& mode);
         ~game_window();
         void update_vidmode();
         void toggle_block_cursor();  
         void close();
 
-        win_props_t& props();
+        inline win_props_t& props() { return _props; } 
 
     private:
         win_props_t _props;
