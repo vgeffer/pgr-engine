@@ -8,10 +8,26 @@
 namespace assets {
     class asset {
         public:
+
+            /// @brief How should assets be cached when loaded
+            ///
+            ///
             enum class caching_policy {
-                NO_CACHE, KEEPALIVE, DESTROY_UNUSED
+                NO_CACHE,       ///< Do not cache loaded asset, nor use cached instance (if exists)
+                KEEPALIVE,      ///< Keep asset alive (in cache) even after all instances are destroyed
+                DESTROY_UNUSED  ///< Free asset after the last instance is destroyed 
             };
 
+
+            /// @brief Loads asset and provides asset caching
+            /// 
+            /// Loads asset of type T and depending on the caching policy caches appropriately. If a cached instance already exists and caching policy permits,
+            /// the cached instance is used and asset is not loaded.
+            /// @param path Filesystem path to the requested asset
+            /// @param policy How asset cache should behave 
+            /// @return Shared pointer to the loaded asset
+            ///
+            ///  @see caching_policy
             template<class T>
                 static std::shared_ptr<T> load(std::string path, caching_policy policy = caching_policy::DESTROY_UNUSED) {
 
@@ -36,7 +52,16 @@ namespace assets {
                 return std::static_pointer_cast<T>(object);
             }
 
-            static inline void invalidate() { _keepalive_list.clear(); }
+
+            /// @brief Invalidates the keep-alive list
+            /// 
+            /// Invalidates the keep-alive list, destroying all the stored instances of the assets loaded with KEEPALIVE cache policy.
+            /// All assets loaded with KEEPALIVE policy prior to calling this function will behave as if they were loaded with DESTROY_UNUSED policy.
+            /// 
+            /// @see caching_policy
+            static void invalidate() { _keepalive_list.clear(); }
+
+
 
         private:
             static std::unordered_map<std::string, std::weak_ptr<asset>> _cache;
