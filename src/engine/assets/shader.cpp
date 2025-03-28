@@ -6,8 +6,10 @@
 #include <unordered_map>
 
 #include "shader.hpp"
+#include "../utils/dynamic_alloc.hpp"
 
 using namespace std;
+using namespace utils;
 using namespace assets;
 
 static const unordered_map<string, stage_type> _ext_type_map = {
@@ -108,7 +110,57 @@ shader_stage::shader_stage(string path)
     if (result == GL_FALSE) 
         throw runtime_error("Shader linking error");    
     
+
+    /* Get attribs */
+    GLint attrib_count = 0,
+          uniform_count = 0;
+    glGetProgramiv(_program, GL_ACTIVE_ATTRIBUTES, &attrib_count);
+    glGetProgramiv(_program, GL_ACTIVE_UNIFORMS, &uniform_count);
     
+
+    GLint longest_attr, longest_uniform;
+
+    /* Buffer to hold attribute names from OpenGL */
+    glGetProgramiv(_program, GL_ACTIVE_ATTRIBUTE_MAX_LENGTH, &longest_attr);
+    dynamic_alloc<char> attr_name = dynamic_alloc<char>(longest_attr);
+
+    /* Buffer to hold uniform names from OpenGL */
+    glGetProgramiv(_program,  GL_ACTIVE_UNIFORM_MAX_LENGTH, &longest_uniform);
+    dynamic_alloc<char> uniform_name = dynamic_alloc<char>(longest_uniform);
+
+    /* Parse out attribs */
+    for (GLint i = 0; i < attrib_count; i++)
+    {
+        GLint attr_size;
+        GLenum attr_type;
+
+        /* Get attrib name */
+        glGetActiveAttrib(_program, (GLuint)i, longest_attr, NULL, &attr_size, &attr_type, attr_name);
+
+        /* Reslove location */
+        GLint location = glGetAttribLocation(_program, attr_name);
+
+        /* Push to attr map - TODO: maybe save type aswell */
+        _used_attrib_locations[string(attr_name)] = location;
+    }
+
+    /* Parse out uniforms */
+    for (GLint i = 0; i < uniform_count; i++)
+    {
+        GLint uniform_size;
+        GLenum uniform_type;
+
+        /* Get uniform name */
+        glGetActiveUniform(_program, (GLuint)i, longest_attr, NULL, &uniform_size, &uniform_type, attr_name);
+
+        /* Reslove location */
+        GLint location = glGetUniformLocation(_program, attr_name);
+
+        /* Push to uniform map - TODO: maybe save type aswell */
+        _used_uniform_locations[string(attr_name)] = location;
+    }
+
+
     /* Clean up */
     glDetachShader(_program, shader);
     glDeleteShader(shader);
@@ -140,3 +192,17 @@ shader_stage::~shader_stage() {
 
     glDeleteProgram(_program);
 } 
+
+GLint shader_stage::attribute_location(string name) const {
+
+    if (auto iter = _used_attrib_locations.find(name); iter != _used_attrib_locations.cend())
+        return iter->second;
+    return -1;
+}
+
+GLint shader_stage::uniform_location(string name) const {
+
+    if (auto iter = _used_uniform_locations.find(name); iter != _used_uniform_locations.cend())
+        return iter->second;
+    return -1;
+}
