@@ -10,14 +10,11 @@ namespace assets {
         public:
 
             /// @brief How should assets be cached when loaded
-            ///
-            ///
             enum class caching_policy {
                 NO_CACHE,       ///< Do not cache loaded asset, nor use cached instance (if exists)
                 KEEPALIVE,      ///< Keep asset alive (in cache) even after all instances are destroyed
                 DESTROY_UNUSED  ///< Free asset after the last instance is destroyed 
             };
-
 
             /// @brief Loads asset and provides asset caching
             /// 
@@ -62,9 +59,8 @@ namespace assets {
             static void invalidate() { _keepalive_list.clear(); }
 
 
-
         private:
-            static std::unordered_map<std::string, std::weak_ptr<asset>> _cache;
-            static std::vector<std::shared_ptr<asset>> _keepalive_list; 
+            inline static std::unordered_map<std::string, std::weak_ptr<asset>> _cache = std::unordered_map<std::string, std::weak_ptr<asset>>(); ///< Cache itself
+            inline static std::vector<std::shared_ptr<asset>> _keepalive_list = std::vector<std::shared_ptr<asset>>();                            ///< List to keep entities alive
     };
 }

@@ -3,10 +3,12 @@
 /// @author geffevil
 ///
 
+#include "nodes/camera.hpp"
+#include "nodes/scene_node.hpp"
 #include "runtime.hpp"
 #include "window/video_mode.hpp"
 #include "game_window.hpp"
-#include "utils/global_settings.hpp"
+#include "utils/project_settings.hpp"
 #include <iostream>
 #include <stdexcept>
 
@@ -31,14 +33,26 @@ int main(int argc, char** argv) {
     }
     
     try {
-        utils::global_settings global_settings("data/project.conf");
-        video_mode vid_mode = video_mode("video.conf", default_mode);
-        game_window window = game_window("Test-Title", &vid_mode);
-        engine_runtime runtime = engine_runtime(&window);
+        utils::project_settings settings("project.json");
+        video_mode vid_mode = video_mode("video.json", default_mode);
+        game_window window = game_window("Test-Title", vid_mode);
+        engine_runtime runtime = engine_runtime(window);
         
+
+        vid_mode.save("video.json");
+        /* Construct a simple scene */
+        nodes::scene_node* root = new nodes::scene_node();
+        nodes::scene_node* camera = new nodes::camera(30, 0.1f, 10.0f);
+        
+        nodes::scene_node* model = new nodes::scene_node();
+    
+        root->add_child(camera);
+        root->add_child(model);
+        
+        runtime.root_node(root);
         runtime.start();
 
-    } catch (runtime_error& e) {
+    } catch (exception& e) {
 
         cerr << e.what() << endl;
         return -1;   
