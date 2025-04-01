@@ -8,27 +8,32 @@
 #include "../../lib/glad/glad.h"
 #include "asset.hpp"
 #include <string>
+#include <unordered_map>
 
 namespace assets {
-
-    enum class stage_type : GLenum {
-        SOURCE_VERT = GL_VERTEX_SHADER,
-        SOURCE_FRAG = GL_FRAGMENT_SHADER,
-        SOURCE_GEOM = GL_GEOMETRY_SHADER,
-    };
     
     class shader_stage : public asset{
     
         public:
-            explicit shader_stage(const std::string path);
+            /// @brief Constructor for the shader_stage class
+            /// Loads, processes and compiles the shader. Also finds all used attributes and uniforms
+            ///
+            /// @param path Filesystem path of the shader
+            shader_stage(const std::string path);
             ~shader_stage();
     
-            GLint get_uniform_location(std::string uniform);
+            GLint attribute_location(std::string name) const;
+            GLint uniform_location(std::string name) const;
             inline GLbitfield type_bitmask() const { return _type_bitmask; }
         
+            operator GLuint() { return _program; }
+
         private:
-            void _cache_shader();
+        
+            std::unordered_map<std::string, GLint> _used_attrib_locations;  ///< Map of used attributes 
+            std::unordered_map<std::string, GLint> _used_uniform_locations;
+
             GLbitfield _type_bitmask;
-            GLenum _program;
+            GLuint _program;
     };
 }

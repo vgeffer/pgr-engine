@@ -1,9 +1,15 @@
+#include <cstddef>
+#include <cstdio>
 #include <fcntl.h>
 #include <filesystem>
+#include <iterator>
 #include <stdexcept>
-#include <sys/types.h>
-#include <unistd.h>
+#include <string>
 #include <unordered_map>
+
+#include <iostream>
+#include <fstream>
+#include <vector>
 
 #include "shader.hpp"
 #include "../utils/dynamic_alloc.hpp"
@@ -12,10 +18,10 @@ using namespace std;
 using namespace utils;
 using namespace assets;
 
-static const unordered_map<string, stage_type> _ext_type_map = {
-    {".geom", stage_type::SOURCE_GEOM},
-    {".frag", stage_type::SOURCE_FRAG},
-    {".vert", stage_type::SOURCE_VERT}
+static const unordered_map<string, GLenum> _ext_type_map = {
+    {".geom", GL_GEOMETRY_SHADER},
+    {".frag", GL_FRAGMENT_SHADER},
+    {".vert", GL_VERTEX_SHADER}
 };
 
 /* TODO: Multistage linking */
@@ -24,10 +30,9 @@ shader_stage::shader_stage(string path)
 
     GLint result = GL_FALSE;
     
-    /* TODO: multiple */
     /* TODO: Rewrite loading logic to use C++11 STL */
     /* TODO: Add source resolving for #pragma use*/
-    stage_type _type;
+    GLenum _type;
     /* Get type from filename */
     string ext = filesystem::path(path).extension();
     if (auto it = _ext_type_map.find(ext); it != _ext_type_map.cend())
@@ -36,13 +41,13 @@ shader_stage::shader_stage(string path)
 
     /* Generate type */
     switch (_type) {
-        case stage_type::SOURCE_FRAG:
+        case GL_FRAGMENT_SHADER:
             _type_bitmask |= GL_FRAGMENT_SHADER_BIT;
             break;
-        case stage_type::SOURCE_GEOM:
+        case GL_GEOMETRY_SHADER:
             _type_bitmask |= GL_GEOMETRY_SHADER_BIT;
             break;
-        case stage_type::SOURCE_VERT:
+        case GL_VERTEX_SHADER:
             _type_bitmask |= GL_VERTEX_SHADER_BIT;
     }
 
@@ -67,29 +72,26 @@ shader_stage::shader_stage(string path)
     //    glDeleteProgram(_program);
     //}
 
-	int shfd = open(path.c_str(), O_RDONLY);
-  
-    if (shfd)
-        throw runtime_error("Unable to open shader file");
+    ifstream shader_file = ifstream(path, ios::binary | ios::in);
 
-    __off_t shader_size;
-    if ((shader_size = lseek(shfd, 0x00, SEEK_END)) < 0)
-        throw runtime_error("Unable to read from shader file");
+    if (!shader_file.is_open())
+        throw runtime_error("Unable to open shader file " + path);
     
-    char* src_buffer = new char[shader_size];
-	if (read(shfd, src_buffer, shader_size) < shader_size) {
-		delete[] src_buffer;
-		close(shfd);
-		throw runtime_error("Unable to read from shader file");
-	}
+    vector<char> src_buffer = vector<char>(
+        istreambuf_iterator<char>(shader_file), 
+        istreambuf_iterator<char>()
+    );
 
-    /* Source read in, close FD */
-    close(shfd);
+    if (!shader_file.eof() && shader_file.fail())        
+		throw runtime_error("Unable to read from shader file " + path);
+
+    shader_file.close();
 
 	/* Compile */
 	GLenum shader = glCreateShader(static_cast<GLenum>(_type));
 	  
-	glShaderSource(shader, 1, reinterpret_cast<const char**>(src_buffer), reinterpret_cast<const GLint*>(&shader_size));
+    const char* source = src_buffer.data();
+	glShaderSource(shader, 1, &source, nullptr);
     glCompileShader(shader);
 
     glGetShaderiv(shader, GL_COMPILE_STATUS, &result);
@@ -164,6 +166,7 @@ shader_stage::shader_stage(string path)
     /* Clean up */
     glDetachShader(_program, shader);
     glDeleteShader(shader);
+    std::cout <<_program <<std::endl;
 
     /* Linking successful, try caching the shader */
     //GLint program_buffer_length = 0;
@@ -189,6 +192,7 @@ shader_stage::shader_stage(string path)
 }
 
 shader_stage::~shader_stage() {
+
 
     glDeleteProgram(_program);
 } 
