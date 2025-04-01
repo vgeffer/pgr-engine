@@ -1,10 +1,19 @@
 #include "renderer.hpp"
-#include "../utils/global_settings.hpp"
+#include "../utils/project_settings.hpp"
+#include "../utils/algorithms.hpp"
 #include "../runtime.hpp"
 #include "mesh.hpp"
+#include <glm/ext/scalar_constants.hpp>
 #include <glm/fwd.hpp>
-#include <stack>
+#include <memory>
 #include <stdexcept>
+#include <stack>
+#include <utility>
+#include <vector>
+#define GLM_ENABLE_EXPERIMENTAL
+#include <glm/gtx/norm.hpp>
+
+#include <iostream>
 
 using namespace std;
 using namespace glm;
@@ -14,22 +23,26 @@ using namespace assets;
 using namespace rendering;
 
 
-renderer::renderer() {
+renderer::renderer()
+    : _draw_list(nullptr) {
 
     if (_instance != nullptr)
         throw logic_error("Renderer already initialised");
     
-    for (GLenum capability : global_settings::gl_global_capabilities())
+    for (GLenum capability : project_settings::gl_global_capabilities())
         glEnable(capability);
     
     /* Setup backface culling - this is constant */
-    glFrontFace(GL_CCW);
     glCullFace(GL_BACK);
+    glFrontFace(GL_CCW);
     glDepthFunc(GL_LESS);
     glClearColor(0.3f, 0.3f, 0.3f, 1.0f);
 
     _instance = this;
     glGenProgramPipelines(1, &_gl_pipeline); /* TODO: mayybe multiple pipelines? */
+
+    /* Get texturing info */
+    glGetIntegerv(GL_MAX_TEXTURE_IMAGE_UNITS, &_max_textures);
 
     /* Generate quad for postprocess */
     const vector<vec2> pp_quad_verts = {
@@ -38,6 +51,9 @@ renderer::renderer() {
         vec2 (1, 1),
         vec2(1, -1)
     };
+
+    /* Load shader */
+    _pp_vertex_stage = asset::load<shader_stage>("shaders/postprocess.vert", asset::caching_policy::KEEPALIVE);
 
     /* Assign to OGL objects */
     glBindVertexArray(_pp_quad_vao);
@@ -51,46 +67,55 @@ renderer::renderer() {
         GL_STATIC_DRAW
     );
 
-    glVertexAttribPointer(_get_location("vertices", NULL), 2, GL_FLOAT, false, 0, 0);
+
+    glVertexAttribPointer(_pp_vertex_stage->attribute_location("vertices"), 2, GL_FLOAT, false, 0, 0);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-
-    _pp_vertex_stage = new shader_stage("shaders/postprocess.vert");
+    glBindVertexArray(0);   
 }
 
-renderer* renderer::instance() {
-    return _instance;
+renderer::~renderer() {
+
+    for (auto& stage : _attached_shader_stages)
+        glUseProgramStages(_gl_pipeline, stage->type_bitmask(), 0);
+
+    glDeleteProgramPipelines(1, &_gl_pipeline);
+
+    /* Delete postprocess passes */
+    for (size_t i = 0; i < _pp_passes.size(); i++)
+        remove_postprocess_pass(i);
+
+    glDeleteBuffers(1, &_pp_quad_vbo);
+    glDeleteVertexArrays(1, &_pp_quad_vao);
 }
 
-int renderer::add_postprocess_pass(shader_stage* shader, bool append) {
+size_t renderer::add_postprocess_pass(shader_stage* shader, bool append) {
 
     if (shader->type_bitmask() != GL_FRAGMENT_SHADER_BIT)
         throw logic_error("Provided shader is not a fragment shader!");
 
-    win_props_t props = engine_runtime::instance()->window()->props();
+    win_props_t props = engine_runtime::instance()->window().props();
 
     postprocess_pass_t pp = {};
     glGenFramebuffers(1, &pp.pp_fbo);
 
     glBindFramebuffer(GL_FRAMEBUFFER, pp.pp_fbo);
-    if (shader->get_uniform_location("screen_texture") >= 0) {
+    if (shader->uniform_location("screen_texture") >= 0) {
 
         /* Screen texture is used, create it as texture*/
         pp.pp_use_color_tex = true;
         glGenTextures(1, &pp.pp_color_buffer);
         glBindTexture(GL_TEXTURE_2D, pp.pp_color_buffer);
 
-        /* TODO: Video modes */
         glTexImage2D(
             GL_TEXTURE_2D, 
             0, GL_RGB, 
-            props.current_mode->w, 
-            props.current_mode->h, 
+            props.current_mode.w, 
+            props.current_mode.h, 
             0, GL_RGB, 
             GL_UNSIGNED_BYTE, NULL
         );
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, global_settings::tex_min_filter());
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, global_settings::tex_mag_filter());
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, project_settings::tex_min_filter());
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, project_settings::tex_mag_filter());
         glBindTexture(GL_TEXTURE_2D, 0);
 
         glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, pp.pp_color_buffer, 0);
@@ -104,32 +129,31 @@ int renderer::add_postprocess_pass(shader_stage* shader, bool append) {
         glRenderbufferStorage(
             GL_RENDERBUFFER, 
             GL_RGB,
-            props.current_mode->w, 
-            props.current_mode->h
+            props.current_mode.w, 
+            props.current_mode.h
         );
 
         glBindRenderbuffer(GL_RENDERBUFFER, 0);
         glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, pp.pp_color_buffer);
     }
 
-    if (shader->get_uniform_location("screen_texture") >= 0) {
+    if (shader->uniform_location("screen_texture") >= 0) {
 
         /* Depth texture is used, create it as texture*/
         pp.pp_use_depth_tex = true;
         glGenTextures(1, &pp.pp_depth_buffer);
         glBindTexture(GL_TEXTURE_2D, pp.pp_depth_buffer);
 
-        /* TODO: Video modes */
         glTexImage2D(
             GL_TEXTURE_2D, 
             0, GL_DEPTH24_STENCIL8, 
-            props.current_mode->w, 
-            props.current_mode->h, 
+            props.current_mode.w, 
+            props.current_mode.h, 
             0, GL_DEPTH_STENCIL, 
             GL_UNSIGNED_INT_24_8, NULL
         );
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, global_settings::tex_min_filter());
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, global_settings::tex_mag_filter());
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, project_settings::tex_min_filter());
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, project_settings::tex_mag_filter());
         glBindTexture(GL_TEXTURE_2D, 0);
 
         glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_TEXTURE_2D, pp.pp_depth_buffer, 0);
@@ -143,8 +167,8 @@ int renderer::add_postprocess_pass(shader_stage* shader, bool append) {
         glRenderbufferStorage(
             GL_RENDERBUFFER, 
             GL_DEPTH24_STENCIL8,
-            props.current_mode->w, 
-            props.current_mode->h
+            props.current_mode.w, 
+            props.current_mode.h
         );
 
         glBindRenderbuffer(GL_RENDERBUFFER, 0);
@@ -167,7 +191,7 @@ int renderer::add_postprocess_pass(shader_stage* shader, bool append) {
     return 0;
 }
 
-void renderer::remove_postprocess_pass(int index) {
+void renderer::remove_postprocess_pass(size_t index) {
 
     if (index < 0 || index >= _pp_passes.size())
         throw runtime_error("Index out of range!");
@@ -175,8 +199,6 @@ void renderer::remove_postprocess_pass(int index) {
     postprocess_pass_t pp = _pp_passes[index];
     _pp_passes.erase(_pp_passes.begin() + index);
     
-    /* Delete OGL objects */
-
     /* Frame buffer */
     glDeleteFramebuffers(1, &pp.pp_fbo);
     
@@ -187,13 +209,6 @@ void renderer::remove_postprocess_pass(int index) {
     /* Depth buffer */
     if (pp.pp_use_depth_tex) glDeleteTextures(1, &pp.pp_depth_buffer);
     else glDeleteRenderbuffers(1, &pp.pp_depth_buffer);
-}
-
-void renderer::load_scene(scene_node* root) {
-
-    stack<scene_node*> dfs_stack;
-    dfs_stack.push(root);
-
 }
 
 /* This... this is gonna be a big one */
@@ -209,44 +224,85 @@ void renderer::draw_scene(camera& camera) {
 
     /* Clear buffer */
     glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
-    
-    /* Render scene */
+
+    mesh_instance* to_draw = _draw_list;
+    GLuint currently_bound_vao = 0;
 
     //===============================
     // PASS 1 - Opaque objects
     //===============================
-    mesh_render_props* to_draw = nullptr;
-    do {
-    
-        /* Reached Transparent objects, end the pass */
-        if (to_draw->material.modulate().a < 1.0f)
+    for (; to_draw != nullptr; to_draw = to_draw->next()) {
+        
+        /* Reached transparent objects, end the pass */
+        if (to_draw->mat.modulate().a < 1.0f)
             break; 
 
-        /* Bind up matrices & materials */
+        /* Check if model is supposed to be drawn */
+        if (!to_draw->draw_enqueued())
+            continue; 
 
+        /* Bind up matrices & materials */
+        
+        /* Binding up */
+        _set_uniform("mat_model", to_draw->model_mat());
 
         /* Draw! */
-        to_draw->mesh.draw();        
+        const GLuint vao = to_draw->drawable->vao();
 
-    } while ((to_draw = to_draw->next()) != nullptr); 
+        if (vao != currently_bound_vao)
+            glBindVertexArray((currently_bound_vao = vao));
+
+        const GLuint mode = to_draw->drawable->mode();    
+        if (mode != GL_TRIANGLE_STRIP || mode != GL_TRIANGLE_FAN)
+            glDrawElements(mode, to_draw->drawable->element_count(), GL_UNSIGNED_INT, static_cast<void*>(0));
+        else glDrawArrays(mode, 0, to_draw->drawable->element_count());
+    } 
 
     //===============================
     // PASS 2 - Transparent objects
     //===============================
-    do {
+    if (to_draw != nullptr) /* Sort only when there is something to sort */
+        utils::linklist_sort<mesh_instance>(to_draw, [&](mesh_instance* a, mesh_instance* b) {
 
-        
-    } while ((to_draw = to_draw->next()) != nullptr);
+            if (!a) return 1;
+            if (!b) return -1;
+            
+            float a_dist2 = length2(camera.position() - reinterpret_cast<scene_node*>(a)->position());
+            float b_dist2 = length2(camera.position() - reinterpret_cast<scene_node*>(b)->position());
+
+            return a_dist2 >= b_dist2 ? (a_dist2 > b_dist2 ? -1 : 0) : 1;
+        });
     
+    for (; to_draw != nullptr; to_draw = to_draw->next()) {
+    
+        if (!to_draw->draw_enqueued())
+            continue;
+
+
+
+            /* Binding up */
+        _set_uniform("mat_model", to_draw->model_mat());
+
+        /* Draw! */
+        const GLuint vao = to_draw->drawable->vao();
+
+        if (vao != currently_bound_vao)
+            glBindVertexArray((currently_bound_vao = vao));
+
+        const GLuint mode = to_draw->drawable->mode();    
+        if (mode != GL_TRIANGLE_STRIP || mode != GL_TRIANGLE_FAN)
+            glDrawElements(mode, to_draw->drawable->element_count(), GL_UNSIGNED_INT, static_cast<void*>(0));
+        else glDrawArrays(mode, 0, to_draw->drawable->element_count());
+    }
 
     //===============================
     // PASS 3 - Post-processing 
     //===============================
     if (camera.render_target() < 0 && !_pp_passes.empty()) {
-        int current_pass_idx = 0,
+        size_t current_pass_idx = 0,
             next_pass_idx = 1;
         
-        attach_stage(*_pp_vertex_stage);
+        _attach_stage(_pp_vertex_stage);
 
         /* Bind Postprocess target -> quad*/
         glBindVertexArray(_pp_quad_vao);
@@ -258,9 +314,9 @@ void renderer::draw_scene(camera& camera) {
             else
                 glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
-            attach_stage(*_pp_passes[current_pass_idx].pp_shader);
-            if (_pp_passes[current_pass_idx].pp_use_color_tex) set_texture("screen_texture", _pp_passes[current_pass_idx].pp_color_buffer);
-            if (_pp_passes[current_pass_idx].pp_use_depth_tex) set_texture("depth_texture", _pp_passes[current_pass_idx].pp_depth_buffer);
+            _attach_stage(_pp_passes[current_pass_idx].pp_shader);
+            if (_pp_passes[current_pass_idx].pp_use_color_tex) _set_texture("screen_texture", _pp_passes[current_pass_idx].pp_color_buffer);
+            if (_pp_passes[current_pass_idx].pp_use_depth_tex) _set_texture("depth_texture", _pp_passes[current_pass_idx].pp_depth_buffer);
 
             /* Draw */
             glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
@@ -278,28 +334,92 @@ void renderer::draw_scene(camera& camera) {
     }
 }
 
-void renderer::set_uniform(std::string uniform_name, glm::mat3x3& mat) {
+vector<pair<GLuint, GLint>> renderer::attribute_location(string name) const {
 
-    int shader_program;
-    int uniform_location = _get_location(uniform_name, NULL);
+    vector<pair<GLuint, GLint>> found_locations;
 
-    glProgramUniformMatrix3fv(
-        shader_program, 
-        uniform_location, 
-        1, GL_FALSE, 
-        &mat[0][0]
-    );
+    for (auto& stage : _attached_shader_stages) {
+
+        GLint location;
+        if ((location = stage->attribute_location(name)) >= 0)
+            found_locations.push_back(make_pair(*stage, location));
+    }
+
+    return found_locations;
 }
 
-void renderer::set_uniform(std::string uniform_name, glm::mat4x4& mat) {
+vector<pair<GLuint, GLint>> renderer::uniform_location(string name) const {
 
-    int shader_program;
-    int uniform_location = _get_location(uniform_name, NULL);
-          
-    glProgramUniformMatrix4fv(
-        shader_program, 
-        uniform_location, 
-        1, GL_FALSE, 
-        &mat[0][0]
-    );
+    vector<pair<GLuint, GLint>> found_locations;
+
+    for (auto& stage : _attached_shader_stages) {
+
+        GLint location;
+        if ((location = stage->uniform_location(name)) >= 0)
+            found_locations.push_back(make_pair(*stage, location));
+    }
+
+    return found_locations;
+}
+
+void renderer::_attach_stage(shared_ptr<shader_stage>& stage) {
+
+    for (int i = 0; i < _attached_shader_stages.size(); i++) {
+
+        /* Stage exists, replace */
+        if (_attached_shader_stages[i]->type_bitmask() == stage->type_bitmask()) {
+            _attached_shader_stages[i] = stage;
+            glUseProgramStages(_gl_pipeline, stage->type_bitmask(), *stage);
+            return;
+        }
+    }
+
+    /* Stage does not exist, add */
+    _attached_shader_stages.push_back(stage);
+    glUseProgramStages(_gl_pipeline, stage->type_bitmask(), *stage);
+}
+
+void _set_texture(std::string texture_name, std::shared_ptr<assets::texture> texture) {
+
+}
+
+void renderer::_set_uniform(std::string uniform_name, int& val) {
+
+    auto found_locations = uniform_location(uniform_name);
+    if (found_locations.size() <= 0)
+        return;
+
+    for (auto [program, location] : found_locations)
+        glProgramUniform1i(
+            program, location, 
+            val
+        );
+}
+
+void renderer::_set_uniform(std::string uniform_name, glm::mat3x3& mat) {
+
+    auto found_locations = uniform_location(uniform_name);
+    if (found_locations.size() <= 0)
+        return;
+
+    for (auto [program, location] : found_locations)
+        glProgramUniformMatrix3fv(
+            program, location, 
+            1, GL_FALSE, 
+            &mat[0][0]
+        );
+}
+
+void renderer::_set_uniform(std::string uniform_name, const glm::mat4x4& mat) {
+
+    auto found_locations = uniform_location(uniform_name);
+    if (found_locations.size() <= 0)
+        return;
+
+    for (auto [program, location] : found_locations)
+        glProgramUniformMatrix4fv(
+            program, location, 
+            1, GL_FALSE, 
+            &mat[0][0]
+        );
 }

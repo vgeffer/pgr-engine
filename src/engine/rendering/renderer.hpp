@@ -1,12 +1,11 @@
 #pragma once
 #include "../assets/shader.hpp"
-#include "../nodes/scene_node.hpp"
 #include "../nodes/camera.hpp"
 #include "light.hpp"
-#include "material.hpp"
 #include "mesh.hpp"
 
 #include <glm/glm.hpp>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -19,50 +18,64 @@ namespace rendering {
                pp_depth_buffer;
         bool pp_use_color_tex,
              pp_use_depth_tex;
-        assets::shader_stage* pp_shader;
+        std::shared_ptr<assets::shader_stage> pp_shader;
     } postprocess_pass_t;
 
     class renderer {
 
         public:
-            explicit renderer();
-            static renderer* instance();
+            renderer();
+            ~renderer();
 
-            int add_postprocess_pass(assets::shader_stage* shader, bool append);
-            void remove_postprocess_pass(int index);
+            inline static renderer* instance() { return _instance; }
 
-            void load_scene(nodes::scene_node* node);
+            size_t add_postprocess_pass(assets::shader_stage* shader, bool append);
+            void remove_postprocess_pass(size_t index);
+
+            void insert_mesh(mesh_instance* mesh);
             void draw_scene(nodes::camera& camera);
 
+            inline mesh_instance* draw_list() const { return _draw_list; }
+            inline mesh_instance* draw_list(mesh_instance* root) { return _draw_list = root; }
 
-            void attach_stage(assets::shader_stage& stage);
+            std::vector<std::pair<GLuint, GLint>> attribute_location(std::string name) const;
+            std::vector<std::pair<GLuint, GLint>> uniform_location(std::string name) const;
 
-            void set_uniform(std::string uniform_name, int& i);
-            void set_uniform(std::string uniform_name, glm::mat3x3& mat);
-            void set_uniform(std::string uniform_name, glm::mat4x4& mat);
-
-            void set_texture(std::string texture_name, assets::texture* texture);
-            void set_texture(std::string texture_name, GLuint texture);
-
-
-            GLuint get_location(std::string name, assets::shader_stage* stage);
 
         private:
-            GLuint _get_location(std::string name, assets::shader_stage* stage);
 
-            static renderer* _instance;
-            GLenum _gl_pipeline;
+            void _attach_stage(std::shared_ptr<assets::shader_stage>& stage);
 
-            /* Models */
-            mesh* _mesh_linklist_head;
+            void _set_uniform(std::string uniform_name, int& i);
+            void _set_uniform(std::string uniform_name, glm::mat3x3& mat);
+            void _set_uniform(std::string uniform_name, const glm::mat4x4& mat);
+
+            void _set_texture(std::string texture_name, std::shared_ptr<assets::texture> texture);
+            void _set_texture(std::string texture_name, GLuint texture) {}
+
+            GLint _attach_stage(GLbitfield type);
+
+            inline static renderer* _instance = nullptr;
+            
+            /* Model list */
+            mesh_instance* _draw_list;
 
             /* Lights */
             std::vector<light*> _lights;
 
+            /* Textures */
+            GLint _max_textures;
+            
+
+            /* Shaders */
+            GLenum _gl_pipeline;
+            std::vector<std::shared_ptr<assets::shader_stage>> _attached_shader_stages;
+
             /* Postprocessing */
             GLenum _pp_quad_vbo,
                    _pp_quad_vao;
+
             std::vector<postprocess_pass_t> _pp_passes;
-            assets::shader_stage* _pp_vertex_stage;
+            std::shared_ptr<assets::shader_stage> _pp_vertex_stage;
     };
 }

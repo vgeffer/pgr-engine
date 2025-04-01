@@ -4,63 +4,67 @@
 #include <glm/fwd.hpp>
 #include <glm/glm.hpp>
 #include <memory>
-#include <utility>
+#include "../nodes/scene_node.hpp"
 
 namespace rendering {
 
 
     class mesh {
         public:
+            typedef struct {
+                glm::vec3 vertex, normal;
+                glm::vec2 uv;
+            } vertex_t;
+
+
             /* Renderer manages drawing */
             virtual ~mesh();
-            inline std::pair<GLuint, GLuint> drawable() const { return std::make_pair(draw_mode, attr_buffer); }
             
+            inline GLuint mode() const { return draw_mode; }
+            inline GLuint element_count() const { return  el_count; }
+            inline GLuint vao() const { return attr_buffer; }             
 
         protected: 
             explicit mesh(); 
 
             GLuint draw_mode; /* GL_LINES/GL_STRIP, etc... */
             /* Somehow pass arrays/indexed */
+            GLuint el_count;
+            
             GLuint attr_buffer;
-
             GLuint vertex_buffer; /* Interleaved with normals & texels */
             GLuint index_buffer;
 
-            /* TODO: State management made easy: */
-            /*
-                - Before mesh is created, check if it's occurence counter is greater than 0 
-                    - If yes, increase it and retrieve it's data
-                    - If no, load it and set counter to 1
-                - Mesh is picked up by the renderer. It optimises it based on the material
-                    |- Adding it to an instance group
-                    \- Creating new rendering_prop and sort it in 
-                - When the model is deleted:
-                    - Decrease occurence counter - if 0, delete the model
-                    - Remove it from instance group
-                    - Or delete rendering_prop 
-            */
-
     };
     
-    class mesh_instance {
+    class mesh_instance : public nodes::node_component {
         
         public:
             virtual ~mesh_instance();  
               
-            std::shared_ptr<mesh> mesh;
-            material material;
+            std::shared_ptr<mesh> drawable;
+            material mat;
 
             inline mesh_instance* prev() const { return _prev; }
             inline mesh_instance* next() const { return _next; }
-        
-            void request_draw();
+
+            inline mesh_instance* next(mesh_instance* next) { return _next = next; }
+            inline mesh_instance* prev(mesh_instance* prev) { return _prev = prev; }
+
+            void request_draw(const glm::mat4x4& transform);
+            bool draw_enqueued();
+            const glm::mat4x4& model_mat() const { return _model_mat; }
+
+            void on_scene_enter() override;
+
+        protected:
+            virtual void prepare_draw() {}
 
         private:
-            mesh_instance *_prev,
+            mesh_instance *_prev, 
                           *_next;
 
             bool _draw_enqueued = false;
+            glm::mat4x4 _model_mat;
     };
-
-
 }
