@@ -20,7 +20,7 @@ namespace assets {
             ~texture();    
 
             /// @brief Getter for OpenGL texture object
-            inline GLuint ogl_texture() const { return _tex_id; }
+            operator GLuint() const { return _tex_id; }
 
             /// @brief Getter for texture's parameters (size [px], # of color channels)
             inline std::pair<glm::ivec2, int> tex_params() const { return std::make_pair(glm::ivec2(_w, _h), _channels); }
