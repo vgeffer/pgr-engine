@@ -16,6 +16,9 @@ This repository contains an implementation of a semestral assignment from the PG
 This project uses and redistributes [```stb_image.h```](https://github.com/nothings/stb/blob/master/stb_image.h), a part of the [stb libraries](https://github.com/nothings/stb/) <br />
 Copyright (c) 2017 Sean Barrett
 
+This project uses and redistributes [```json```](https://github.com/nlohmann/json), JSON loader <br/>
+Copyright (c) 2013-2025 Niels Lohmann
+
 This project uses and redistributes [```glad```](https://github.com/Dav1dde/glad) OpenGL Loader <br />
 Copyright (c) 2013-2022 David Herberth
 
