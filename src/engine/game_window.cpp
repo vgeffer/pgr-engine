@@ -1,5 +1,7 @@
+#include "../lib/glad/glad.h"
 #include "game_window.hpp"
 #include "window/video_mode.hpp"
+#include <GLFW/glfw3.h>
 #include <stdexcept>
 
 game_window::game_window(std::string title, video_mode& mode) 
@@ -32,8 +34,13 @@ game_window::game_window(std::string title, video_mode& mode)
     /* Apply callbacks */
     if (_props.current_mode.is_vsync)
         glfwSwapInterval(1);
-        
+    
     glfwMakeContextCurrent(static_cast<GLFWwindow*>(_props.glfw_handle));
+    
+    
+    /* Initialize GLAD */
+    if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
+        throw std::runtime_error("Unable to init GLAD!");
     glfwShowWindow(static_cast<GLFWwindow*>(_props.glfw_handle));
 }
 
@@ -89,12 +96,17 @@ void game_window::update_vidmode() {
     glfwShowWindow(_props.glfw_handle);
 }
 
+void game_window::close() {
+    _props.is_closing = true;
+}
+
 void game_window::_apply_default_hints() {
 
     /* Done this way since they are applied in multiple places */
     glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
+    glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4); 
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 6);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
     glfwWindowHint(GLFW_SAMPLES, (int)_props.current_mode.antialias);
 }

@@ -7,12 +7,14 @@
 #include "game_window.hpp"
 #include "events.hpp"
 
+#include <glm/fwd.hpp>
 #include <memory>
 
 class engine_runtime {
    
     public:
         engine_runtime(game_window& window);
+        ~engine_runtime();
         void start(); 
 
         static engine_runtime* instance();
@@ -23,8 +25,7 @@ class engine_runtime {
         nodes::scene_node* root_node(nodes::scene_node* node);
 
     private:
-        static engine_runtime* _instance;
-        
+        inline static engine_runtime* _instance = nullptr;
         nodes::scene_node* _root_node;
         game_window& _window;
 
@@ -34,4 +35,7 @@ class engine_runtime {
         std::unique_ptr<events> _events;
 
         void _teardown();
+        void _recursive_scene_update(const float elapsed, nodes::scene_node* node, const glm::mat4x4& parent_transform);
+        void _recursive_scene_delete(nodes::scene_node* node);
+        
 };
