@@ -19,8 +19,8 @@ LD := g++
 AR := gcc-ar
 
 # Common flags
-CCFLAGS_COMMON		:= -c -pipe 
-CXXFLAGS_COMMON		:= -c -pipe
+CCFLAGS_COMMON		:= -c -pipe -fPIC
+CXXFLAGS_COMMON		:= -c -pipe -fPIC
 LDFLAGS_COMMON		:=
 
 # Conditional arch params - x86 only

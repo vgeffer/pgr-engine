@@ -26,4 +26,4 @@ shared:
 .PHONY: exec
 exec:
 	@echo "[LD] $(OUTPUT_FILENAME)" && \
-	$(LD) $(LINK_FLAGS) $(obj) $(OUT_DIR)/glad.a $(OUT_DIR)/tinyxml2.a -o $(OUT_DIR)/$(OUTPUT_FILENAME)
+	$(LD) $(LINK_FLAGS) $(obj) $(OUT_DIR)/glad.a -o $(OUT_DIR)/$(OUTPUT_FILENAME)
