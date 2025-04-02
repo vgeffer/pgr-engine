@@ -6,6 +6,7 @@
 #include "physics/physics.hpp"
 #include "rendering/mesh.hpp"
 #include "rendering/renderer.hpp"
+#include "utils/observer_ptr.hpp"
 #include "utils/project_settings.hpp"
 
 #include <GLFW/glfw3.h>
@@ -23,7 +24,7 @@ using namespace rendering;
 using namespace std::chrono;
 
 engine_runtime::engine_runtime(game_window& window) 
-    : _root_node(new scene_node(scene_node::node_type::ROOT)), _window(window) {
+    : _root_node(new scene_node(scene_node::node_type::ROOT)), _window(window), _main_camera(nullptr) {
 
     _events = make_unique<events>();
     _renderer = make_unique<renderer>();
@@ -55,7 +56,7 @@ void engine_runtime::start() {
                              tp_now;
 
     float physics_delta = 0.0f;
-    float physics_interval = 0.01f;// project_settings::physics_interval();
+    float physics_interval = project_settings::physics_interval();
 
     /* Mainloop */
     while (!_window.props().is_closing) {
@@ -80,10 +81,15 @@ void engine_runtime::start() {
         _recursive_scene_update(elapsed, _root_node, ident);
 
         /* Render & postprocess */
-        _renderer->draw_scene(*_main_camera);
+        if (_main_camera)
+            _renderer->draw_scene(*_main_camera);
 
         /* Display new frame */
         glfwSwapBuffers(_window.props().glfw_handle);
+
+        /* Debug */
+        if (_events->is_key_pressed(key_code::ESC))
+            _window.close();
     }
 }
 
@@ -117,7 +123,7 @@ void engine_runtime::_recursive_scene_update(const float elapsed, scene_node* no
     /* Frustrum culling on the object - if renderable */
     if (node->has_component<mesh_instance>()) {
         
-        mesh_instance* mesh = dynamic_cast<mesh_instance*>(node->component<mesh_instance>());
+        auto mesh = node->component<mesh_instance>();
         mesh->request_draw(node->model_mat());
     }
         

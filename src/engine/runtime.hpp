@@ -21,7 +21,8 @@ class engine_runtime {
         
         inline nodes::scene_node* root_node() const { return _root_node; }
         inline game_window& window() const { return _window; }
-        
+        inline void set_main_camera(nodes::camera* camera) { _main_camera = camera; }
+
         nodes::scene_node* root_node(nodes::scene_node* node);
 
     private:
