@@ -1,33 +1,36 @@
 #include <cmath>
+#include <glm/ext/matrix_clip_space.hpp>
+#include <glm/ext/matrix_transform.hpp>
+#include <glm/ext/quaternion_geometric.hpp>
+#include <glm/ext/vector_float3.hpp>
 #include <glm/fwd.hpp>
+#include <glm/geometric.hpp>
+#define GLM_ENABLE_EXPERIMENTAL
+#include <glm/gtx/quaternion.hpp>
 #include "camera.hpp"
-#include "scene_node.hpp"
+
 #include "../runtime.hpp"
 
 using namespace glm;
 using namespace nodes;
 
 static inline mat4x4 _make_projection(float fov, float near, float far) {
-    win_props_t& win = engine_runtime::instance()->window()->props();
+    
+    win_props_t& win = engine_runtime::instance()->window().props();
+    float asp_ratio = (float)win.current_mode.w / (float)win.current_mode.h;
 
-    float tan_fov = tanf(glm::radians(fov / 2));
-    float asp_ratio = (float)win.current_mode->w / (float)win.current_mode->h;
-
-    return mat4x4(
-        1.0f / tan_fov, 0, 0, 0,
-        0, 1.0f / (tan_fov * asp_ratio) ,  0, 0,
-        0, 0, -((far + near) / (far - near)), -1,
-        0, 0, -((2.0f * far * near) / (far - near)), 0
-    ); 
+    return perspective(fov, asp_ratio, near, far);
 }
 
 camera::camera(float fov, float near, float far) 
-    : scene_node(), _fov(fov), _near(near), _far(far), _projection(_make_projection(fov, near, far)) {}
+    : _projection(_make_projection(fov, near, far)), _fov(fov), _near(near), _far(far) {}
 
 
 mat4x4 camera::view() const {
 
-    /* Recompute view */
+    vec3 up = normalize(toMat3(rotation()) * vec3(0, 1, 0));
+    vec3 fwd = normalize(toMat3(rotation()) * vec3(0, 0, -1));
+    return lookAt(position(), vec3(0, 0, -1) + fwd, up);
 }
 
 float camera::fov(float& fov) {
@@ -48,3 +51,17 @@ float camera::far(float& far) {
     return _far = far;
 }
 
+/*
+
+
+angle = atan2( vector.x, vector.z ) // Note: I expected atan2(z,x) but OP reported success with atan2(x,z) instead! Switch around if you see 90° off.
+qx = 0
+qy = 1 * sin( angle/2 )
+qz = 0
+qw = cos( angle/2 )
+
+qx = ax * sin(angle/2)
+qy = ay * sin(angle/2)
+qz = az * sin(angle/2)
+qw = cos(angle/2)
+*/

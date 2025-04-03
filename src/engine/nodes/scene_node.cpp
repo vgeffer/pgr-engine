@@ -1,15 +1,24 @@
 #include "scene_node.hpp"
+#include <glm/ext/matrix_transform.hpp>
 #include <glm/fwd.hpp>
 #include <stdexcept>
+#define GLM_ENABLE_EXPERIMENTAL
+#include <glm/gtx/quaternion.hpp>
+
+#include "../rendering/mesh.hpp"
+#include "../rendering/renderer.hpp"
 
 using namespace std;
 using namespace glm;
 using namespace nodes;
 
 
-static mat4x4 _calc_model_mat(const vec3& pos, const quat& rot, const vec3& scale) {
+static mat4x4 _calc_model_mat(const vec3& pos, const quat& rot, const vec3& scl) {
 
-    return mat4x4();
+    return scale(
+        translate(identity<mat4x4>(), pos) * toMat4(rot),
+        scl
+    );
 }
         
 scene_node::scene_node()
@@ -70,6 +79,12 @@ void scene_node::_on_scene_enter() {
     /* Set in_scene flag */
     _in_scene = true;
 
+    /* Special actions to hand off components to core structures */
+    /* TODO: figure out how to mush this to component->on_scene_enter */
+    if (_components.has<rendering::mesh_instance>())
+        rendering::renderer::instance()->insert_mesh(component<rendering::mesh_instance>());
+
+
     /* All components now enter scene */
     for (auto& [id, component] : _components.get_all())
         component->on_scene_enter();
@@ -86,12 +101,13 @@ bool scene_node::_check_cycles() {
     scene_node* walk = _parent;
     while (walk != nullptr) {
 
-        /* TODO: Designate root node */
         if (walk->_type == node_type::ROOT)
             return false;
     
         if (walk == this)
             return true;
+
+        walk = walk->_parent;
     }
 
     return false;
