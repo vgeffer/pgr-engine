@@ -21,7 +21,7 @@ model::model(string path)
     Assimp::Importer importer;
     const aiScene* scene = importer.ReadFile(path.c_str(),
         aiProcess_Triangulate |
-        aiProcess_CalcTangentSpace |
+        aiProcess_FlipUVs |
         aiProcess_GenNormals
     );
 
@@ -31,37 +31,35 @@ model::model(string path)
     /* Grab the 0th mesh */
     const aiMesh* mesh = scene->mMeshes[0];
 
-
    /* Bind mesh's VAO */
    glBindVertexArray(attr_buffer);
 
     vector<mesh::vertex_t> vertices;
     vertices.reserve(mesh->mNumVertices);
-    for (size_t i = 0; i < mesh->mNumVertices; i++) {
 
-        /* Hopefully -O2 will do it's job */
-        vertex_t v = {
-            .vertex = glm::vec3(mesh->mVertices[i].x, mesh->mVertices[i].y, mesh->mVertices[i].z),
-            .normal = glm::vec3(mesh->mNormals[i].x, mesh->mNormals[i].y, mesh->mNormals[i].z),
-            .uv = glm::vec2(mesh->mTextureCoords[i][0].x, mesh->mTextureCoords[i][0].y)
-        };
-        vertices.push_back(v);
-    }
+    /* Hopefully -O2 will do it's job */
+    for (size_t i = 0; i < mesh->mNumVertices; i++)
+        vertices.emplace_back(
+            glm::vec3(mesh->mVertices[i].x, mesh->mVertices[i].y, mesh->mVertices[i].z),
+            glm::vec3(mesh->mNormals[i].x, mesh->mNormals[i].y, mesh->mNormals[i].z),
+            glm::vec2(mesh->mTextureCoords[0][i].x, mesh->mTextureCoords[0][i].y)/* TODO: */
+        );
     el_count = vertices.size();
-
+    
     /* Push vertices to GPU */
     glBindBuffer(GL_ARRAY_BUFFER, vertex_buffer);
     glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(vertices[0]), vertices.data(), GL_STATIC_DRAW);
 
     if (mesh->HasFaces()) {
 
-        vector<int> indices;
+        vector<uint32_t> indices;
+        indices.reserve(mesh->mNumFaces * 3); /* A reasonable estimate, since all faces are triangles */
+
         for (size_t i = 0; i < mesh->mNumFaces; i++) {
 
-            const aiFace* face = mesh->mFaces;
-            
-            for (size_t e = 0; e < face->mNumIndices; i++)
-                indices.push_back(face->mIndices[e]);            
+            const aiFace face = mesh->mFaces[i];
+            for (size_t e = 0; e < face.mNumIndices; e++)         
+                indices.emplace_back(face.mIndices[e]);   
         }
 
          /* Indices */
@@ -70,10 +68,9 @@ model::model(string path)
         el_count = indices.size();
     }
 
-    /* TODO: Setup & enable arrays */
-    glVertexAttribPointer(0, 3, GL_FLOAT, false, 0, 0);
-    glVertexAttribPointer(1, 3, GL_FLOAT, false, 12, 0);
-    glVertexAttribPointer(2, 2, GL_FLOAT, false, 24, 0);
+    glVertexAttribPointer(0, 3, GL_FLOAT, false, sizeof(vertices[0]), reinterpret_cast<void*>(0 * sizeof(float)));
+    glVertexAttribPointer(1, 3, GL_FLOAT, false, sizeof(vertices[0]), reinterpret_cast<void*>(3 * sizeof(float)));
+    glVertexAttribPointer(2, 2, GL_FLOAT, false, sizeof(vertices[0]), reinterpret_cast<void*>(6 * sizeof(float)));
     
     glEnableVertexAttribArray(0);
     glEnableVertexAttribArray(1);

@@ -1,18 +1,15 @@
-#include <cstddef>
-#include <cstdio>
-#include <fcntl.h>
 #include <filesystem>
 #include <iterator>
+#include <ostream>
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
-
 #include <iostream>
 #include <fstream>
-#include <vector>
+
 
 #include "shader.hpp"
-#include "../utils/dynamic_alloc.hpp"
+#include "../utils/buffer.hpp"
 
 using namespace std;
 using namespace utils;
@@ -30,7 +27,6 @@ shader_stage::shader_stage(string path)
 
     GLint result = GL_FALSE;
     
-    /* TODO: Rewrite loading logic to use C++11 STL */
     /* TODO: Add source resolving for #pragma use*/
     GLenum _type;
     /* Get type from filename */
@@ -51,33 +47,12 @@ shader_stage::shader_stage(string path)
             _type_bitmask |= GL_VERTEX_SHADER_BIT;
     }
 
-    /* Check if there already exists cahced version of the shader */
-    //if (cache::has_item(path + "_source")) {
-    //
-    //    _program = glCreateProgram();
-    //
-    //    /* Load from cache */
-    //    size_t shader_size;        
-    //    void* shader_data = cache::get_item(path + "_source", &shader_size); 
-    //    void* format_data = cache::get_item(path + "_format", NULL); /* Header has a constant size of sizeof(GLenum) */ 
-    //
-    //    /* Load Data */
-    //    glProgramBinary(_program, *(static_cast<GLenum*>(format_data)), shader_data, shader_size);
-    //
-    //    glGetProgramiv(_program, GL_LINK_STATUS, &result);
-    //    if (result != GL_FALSE)
-    //        return; /* Shader loaded successfully */
-    //
-    //    /* If failed, fall through and compile the shader properly */    
-    //    glDeleteProgram(_program);
-    //}
-
-    ifstream shader_file = ifstream(path, ios::binary | ios::in);
+    ifstream shader_file = ifstream(path, ios::in);
 
     if (!shader_file.is_open())
         throw runtime_error("Unable to open shader file " + path);
     
-    vector<char> src_buffer = vector<char>(
+    string src_buffer = string(
         istreambuf_iterator<char>(shader_file), 
         istreambuf_iterator<char>()
     );
@@ -86,18 +61,34 @@ shader_stage::shader_stage(string path)
 		throw runtime_error("Unable to read from shader file " + path);
 
     shader_file.close();
-
+    
 	/* Compile */
 	GLenum shader = glCreateShader(static_cast<GLenum>(_type));
 	  
-    const char* source = src_buffer.data();
+    const char* source = src_buffer.c_str();
 	glShaderSource(shader, 1, &source, nullptr);
     glCompileShader(shader);
 
     glGetShaderiv(shader, GL_COMPILE_STATUS, &result);
-    if (result == GL_FALSE) 
-        throw runtime_error("Shader compilation error"); 
+    if (result == GL_FALSE)  {
+     
+        GLint error_len = 0;
+        glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &error_len);
     
+        // The maxLength includes the NULL character
+        utils::buffer<GLchar> error_buffer = utils::buffer<GLchar>(error_len);
+        glGetShaderInfoLog(shader, error_len, &error_len, error_buffer);
+
+        /* TODO: Move to internal logging (Once ready) */
+        std::cerr << "In file " << path << ":\n";
+        std::cerr << "  " << error_buffer << std::endl;
+
+        /* Output source code of the file*/
+        std::cerr << "\nSource: \n" << src_buffer.c_str() << std::endl;
+
+        glDeleteShader(shader);
+        throw runtime_error("Shader compilation error"); 
+    }
     /* Compilation successful, link shader */
     _program = glCreateProgram();
     glProgramParameteri(
@@ -109,26 +100,37 @@ shader_stage::shader_stage(string path)
 
     glLinkProgram(_program);
     glGetProgramiv(_program, GL_LINK_STATUS, &result);
-    if (result == GL_FALSE) 
-        throw runtime_error("Shader linking error");    
+    if (result == GL_FALSE)  {
+     
+        GLint error_len = 0;
+        glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &error_len);
     
+        // The maxLength includes the NULL character
+        utils::buffer<GLchar> error_buffer = utils::buffer<GLchar>(error_len);
+        glGetShaderInfoLog(shader, error_len, &error_len, error_buffer);
 
+        /* TODO: Move to internal logging (Once ready) */
+        std::cerr << "In file " << path << ":\n";
+        std::cerr << "  " << error_buffer << std::endl;
+        glDeleteShader(shader);
+        throw runtime_error("Shader linking error"); 
+    }   
+    
     /* Get attribs */
     GLint attrib_count = 0,
           uniform_count = 0;
     glGetProgramiv(_program, GL_ACTIVE_ATTRIBUTES, &attrib_count);
     glGetProgramiv(_program, GL_ACTIVE_UNIFORMS, &uniform_count);
-    
 
     GLint longest_attr, longest_uniform;
 
     /* Buffer to hold attribute names from OpenGL */
     glGetProgramiv(_program, GL_ACTIVE_ATTRIBUTE_MAX_LENGTH, &longest_attr);
-    dynamic_alloc<char> attr_name = dynamic_alloc<char>(longest_attr);
+    buffer<char> attr_name = buffer<char>(longest_attr);
 
     /* Buffer to hold uniform names from OpenGL */
     glGetProgramiv(_program,  GL_ACTIVE_UNIFORM_MAX_LENGTH, &longest_uniform);
-    dynamic_alloc<char> uniform_name = dynamic_alloc<char>(longest_uniform);
+    buffer<char> uniform_name = buffer<char>(longest_uniform);
 
     /* Parse out attribs */
     for (GLint i = 0; i < attrib_count; i++)
@@ -162,33 +164,9 @@ shader_stage::shader_stage(string path)
         _used_uniform_locations[string(attr_name)] = location;
     }
 
-
     /* Clean up */
     glDetachShader(_program, shader);
     glDeleteShader(shader);
-    std::cout <<_program <<std::endl;
-
-    /* Linking successful, try caching the shader */
-    //GLint program_buffer_length = 0;
-    //GLenum program_format = 0;
-    //GLsizei program_size = 0;
-    //
-    //glGetProgramiv(
-    //    _program,
-    //    GL_PROGRAM_BINARY_LENGTH,
-    //    &program_buffer_length
-    //);
-    //
-    //if (program_buffer_length <= 0)
-    //    return; /* TODO: Log error, but do not throw */
-    //char* program_binary = new char[program_buffer_length];
-    //
-    //glGetProgramBinary(_program, program_buffer_length, &program_size, &program_format, program_binary);
-    //
-    //cache::add_item(string(path) + "_source", true, static_cast<void*>(program_binary), program_size);
-    //cache::add_item(string(path) + "_format", true, static_cast<void*>(&program_format), sizeof(GLenum));
-    //
-    //delete[] program_binary;
 }
 
 shader_stage::~shader_stage() {

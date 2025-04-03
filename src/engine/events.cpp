@@ -85,7 +85,7 @@ bool events::is_key_released(key_code key) {
     if (!_instance)
         throw std::logic_error("Event handler not initialised");
 
-    return !GET_KEY(CURRENT_BUFFER, key);
+    return !GET_KEY(CURRENT_BUFFER, key) && GET_KEY(LAST_BUFFER, key);
 }
     
 bool events::is_mouse_pressed(mouse_code button) {
@@ -109,7 +109,7 @@ bool events::is_mouse_released(mouse_code button) {
     if (!_instance)
         throw std::logic_error("Event handler not initialised");
 
-    return !GET_BUTTON(CURRENT_BUFFER, button);
+    return !GET_BUTTON(CURRENT_BUFFER, button) && GET_BUTTON(LAST_BUFFER, button);
 }
 
 glm::vec2 events::mouse_pos() {

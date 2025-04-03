@@ -1,4 +1,10 @@
+///
+/// @file asset.hpp
+/// @author geffevil
+/// @brief A base class for assets and a simple synchronous asset loader with caching
+///
 #pragma once
+
 #include <memory>
 #include <string>
 #include <type_traits>
@@ -18,7 +24,7 @@ namespace assets {
 
             /// @brief Loads asset and provides asset caching
             /// 
-            /// Loads asset of type T and depending on the caching policy caches appropriately. If a cached instance already exists and caching policy permits,
+            /// Loads asset of type @c T and depending on the caching policy caches appropriately. If a cached instance already exists and caching policy permits,
             /// the cached instance is used and asset is not loaded.
             /// @param path Filesystem path to the requested asset
             /// @param policy How asset cache should behave 
@@ -41,7 +47,7 @@ namespace assets {
                     /* Loading it for a first time */
                     std::shared_ptr<T> ptr = std::make_shared<T>(path);
                     if (policy == caching_policy::KEEPALIVE)
-                        _keepalive_list.push_back(ptr); /* Keep object alive even if all of its instances were destroyed */
+                        _keepalive_list.push_back(std::dynamic_pointer_cast<asset>(ptr)); /* Keep object alive even if all of its instances were destroyed */
                     
                     _cache[path] = std::static_pointer_cast<asset>(ptr);
                     return ptr;
@@ -52,8 +58,8 @@ namespace assets {
 
             /// @brief Invalidates the keep-alive list
             /// 
-            /// Invalidates the keep-alive list, destroying all the stored instances of the assets loaded with KEEPALIVE cache policy.
-            /// All assets loaded with KEEPALIVE policy prior to calling this function will behave as if they were loaded with DESTROY_UNUSED policy.
+            /// Invalidates the keep-alive list, destroying all the stored instances of the assets loaded with @c KEEPALIVE cache policy.
+            /// All assets loaded with @c KEEPALIVE policy prior to calling this function will behave as if they were loaded with @c DESTROY_UNUSED policy.
             /// 
             /// @see caching_policy
             static void invalidate() { _keepalive_list.clear(); }
