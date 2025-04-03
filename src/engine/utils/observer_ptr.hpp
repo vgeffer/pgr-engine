@@ -1,10 +1,12 @@
+///
+/// @file observer_ptr.hpp
+/// @author geffevil
+///
 #pragma once
 
-
 #include <cstring>
-#include <iostream>
-#include <new>
 #include <stdexcept>
+#include <type_traits>
 #include <utility>
 
 namespace utils {
@@ -17,15 +19,24 @@ namespace utils {
     template <typename _D, typename _S> observer_ptr<_D> observer_cast(observer_ptr<_S>&& ptr);
 
 
-    /* Declarations */
+    /// @brief Internal state of the @c observable_ptr and all its observers
+    /// @private
     struct _observable_state {
-        size_t active_observers;
-        bool ptr_valid;
+        size_t active_observers;    ///< Number of active observers of this observable pointer
+        bool ptr_valid;             ///< Flag, if upstream observable pointer is still valid
     };
 
-    /// @warning This class is not thread-safe! 
+
+    /// @brief A smart pointer that has the ablility to spawn "read-only" observers
+    ///
+    /// This class satisfies the requirements of @a MoveConstructible and @a MoveAssignable, however it is neither @a CopyConstructible nor @a CopyAssignable
+    /// @warning This implementation is not thread-safe! 
+    /// @see observer_ptr, observer_cast, make_observable
     template <typename _T> 
         class observable_ptr {
+
+            /* Assert that only copyable _Ts are used to create observable ptr */
+            static_assert(std::is_copy_constructible<_T>::value);
 
             /* So this class does not feel lonely <3 */   
             friend class observer_ptr<_T>;
@@ -33,20 +44,10 @@ namespace utils {
 
             public:
                 observable_ptr()
-                    : _data(nullptr), _state(new _observable_state{0, false}) { std::cout << "B" << std::endl; }
+                    : _data(nullptr), _state(new _observable_state{0, false}) {}
 
                 observable_ptr(_T* data)
-                    : _data(data), _state(new _observable_state{0, true}) { std::cout << "C" << std::endl; }
-
-                /* TODO: Maybe learn std::allocators? */
-                observable_ptr(const observable_ptr<_T>& other)
-                    : _data(nullptr), _state(new _observable_state{0, other._data != nullptr}) {
-                    
-                    if (other._data != nullptr) {
-                        _data = static_cast<_T*>(::operator new(sizeof(*other._data)));
-                        std::memcpy(_data, other._data, sizeof(*other._data));
-                    }    
-                }
+                    : _data(data), _state(new _observable_state{0, true}) {}
 
                 observable_ptr(observable_ptr<_T>&& other) noexcept
                     : _data(other._data), _state(other._state) {
@@ -70,37 +71,6 @@ namespace utils {
 
                     /* Delete the underlying data */
                     delete _data;
-                }
-
-                constexpr observable_ptr<_T>& operator=(const observable_ptr<_T>& other) {
-
-                    /* Delete old _state and establish new one */
-                    if (_state != nullptr) {
-                    
-                        /* There are active observers. Just alloc new state and leave management */
-                        /* of the old state to the observers */
-                        if (_state->active_observers > 0)
-                            _state = new _observable_state {0, other._data != nullptr};
-
-                        /* Otherwise, just overwrite the old one */
-                        else
-                            *_state = {0, other._data != nullptr};
-                    }
-                    else _state = new _observable_state {0, other._data != nullptr}; /* No state exists or the object has been moved */
-
-                    /* Delete old _data */ 
-                    delete _data;
-                    _data = nullptr;
-
-                    /* Since this is a copy, observers are not carried over */
-
-                    /* Copy data */
-                    if (other._data != nullptr) {
-                        _data = static_cast<_T*>(::operator new(sizeof(*other._data)));
-                        std::memcpy(_data, other._data, sizeof(*other._data));
-                    }
-
-                    return *this;
                 }
 
                 constexpr observable_ptr<_T>& operator=(observable_ptr<_T>&& other) {
@@ -152,6 +122,10 @@ namespace utils {
                 _observable_state* _state;
         };
 
+    /// @brief A "read-only" view of the parent @c observable_ptr
+    ///
+    /// Unlike @c observable_ptr, this class satisfies the requirements of @a CopyConstructible and @a CopyAssignable
+    /// @warning This implementation is not thread-safe! 
     template <typename _T> 
         class observer_ptr {
             
@@ -208,20 +182,19 @@ namespace utils {
                     return _data; 
                 }
 
+                constexpr operator bool() const noexcept { return valid(); }
+
             private:
-                constexpr observer_ptr(_T* data, _observable_state* state) 
+                constexpr observer_ptr(_T* data, _observable_state* state) noexcept
                     : _data(data), _state(state) {}
 
                 _T* _data;
                 _observable_state* _state;
         };
 
+    /// @brief asd
     template <typename _D, typename _S>
         observable_ptr<_D> observer_cast(observable_ptr<_S>&& ptr) {
-
-            std::cout << std::hex << ptr._data << std::endl;
-            std::cout << std::hex << ptr._state << std::endl;
-
 
             if (ptr._data == nullptr)
                 throw std::runtime_error("Object already deleted or moved");
@@ -251,8 +224,12 @@ namespace utils {
             return observer_ptr<_D>(data, state);
         }     
         
+    /// @brief Constructs an @c observable_ptr from provided arguments
+    ///
+    /// This function takes variable number of arguments and forwards them to construct a new instance of an object of type @c T.
+    /// @return @c observable_ptr to an object of type @c T. An @c observable_ptr returned this way is @b always @b valid.
     template <typename _T, typename ..._Args>
-        observable_ptr<_T> make_observable(_Args... args) { 
+        observable_ptr<_T> make_observable(_Args&&... args) { 
             return observable_ptr<_T>(new _T(
                 std::forward<_Args>(args)...
             ));
