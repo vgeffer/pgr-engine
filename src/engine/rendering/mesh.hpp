@@ -11,10 +11,15 @@ namespace rendering {
 
     class mesh {
         public:
-            typedef struct {
+            struct vertex_t{
+
+                vertex_t() {}
+                vertex_t(glm::vec3 v, glm::vec3 n, glm::vec2 uv)
+                    : vertex(v), normal(n), uv(uv) {}
+
                 glm::vec3 vertex, normal;
                 glm::vec2 uv;
-            } vertex_t;
+            };
 
 
             /* Renderer manages drawing */
@@ -40,16 +45,11 @@ namespace rendering {
     class mesh_instance : public nodes::node_component {
         
         public:
-            virtual ~mesh_instance();  
+            mesh_instance(std::shared_ptr<mesh> d, utils::observer_ptr<material>&& m) : nodes::node_component(), drawable(d), mat(m) {};
+            ~mesh_instance() override = default;  
               
             std::shared_ptr<mesh> drawable;
-            material mat;
-
-            inline mesh_instance* prev() const { return _prev; }
-            inline mesh_instance* next() const { return _next; }
-
-            inline mesh_instance* next(mesh_instance* next) { return _next = next; }
-            inline mesh_instance* prev(mesh_instance* prev) { return _prev = prev; }
+            utils::observer_ptr<material> mat;
 
             void request_draw(const glm::mat4x4& transform);
             bool draw_enqueued();
@@ -61,9 +61,6 @@ namespace rendering {
             virtual void prepare_draw() {}
 
         private:
-            mesh_instance *_prev, 
-                          *_next;
-
             bool _draw_enqueued = false;
             glm::mat4x4 _model_mat;
     };

@@ -24,6 +24,7 @@ namespace assets {
     
             GLint attribute_location(std::string name) const;
             GLint uniform_location(std::string name) const;
+            GLint uniform_block_binding(std::string name) const;
             inline GLbitfield type_bitmask() const { return _type_bitmask; }
         
             operator GLuint() { return _program; }
@@ -32,6 +33,7 @@ namespace assets {
         
             std::unordered_map<std::string, GLint> _used_attrib_locations;  ///< Map of used attributes 
             std::unordered_map<std::string, GLint> _used_uniform_locations;
+            std::unordered_map<std::string, GLint> _used_uniform_block_bindings;
 
             GLbitfield _type_bitmask;
             GLuint _program;

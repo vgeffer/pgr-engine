@@ -8,6 +8,7 @@
 #include "rendering/renderer.hpp"
 #include "utils/observer_ptr.hpp"
 #include "utils/project_settings.hpp"
+#include "window/key_code.hpp"
 
 #include <GLFW/glfw3.h>
 #include <chrono>
@@ -90,6 +91,19 @@ void engine_runtime::start() {
         /* Debug */
         if (_events->is_key_pressed(key_code::ESC))
             _window.close();
+        
+        if (_events->is_key_held(key_code::D)) {
+            vec3 pos = _main_camera->position();
+            pos.x += 10 * elapsed;
+            _main_camera->position(pos);
+        }
+
+
+        if (_events->is_key_held(key_code::A)) {
+            vec3 pos = _main_camera->position();
+            pos.x -= 10 * elapsed;
+            _main_camera->position(pos);
+        }
     }
 }
 
@@ -124,7 +138,7 @@ void engine_runtime::_recursive_scene_update(const float elapsed, scene_node* no
     if (node->has_component<mesh_instance>()) {
         
         auto mesh = node->component<mesh_instance>();
-        mesh->request_draw(node->model_mat());
+        mesh->request_draw(node->model_mat() * parent_transform);
     }
         
     /* Append children to queue*/

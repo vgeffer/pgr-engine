@@ -1,4 +1,5 @@
 #include "model.hpp"
+#include <assimp/material.h>
 #include <assimp/mesh.h>
 #include <glm/fwd.hpp>
 #include <glm/glm.hpp>
@@ -14,7 +15,7 @@ using namespace std;
 using namespace assets;
 using namespace rendering;
 
-model::model(string path) 
+model::model(string path, bool parse_material) 
     : mesh() {    
 
     /* TODO: Down the line, replace with custom loader */
@@ -79,6 +80,6 @@ model::model(string path)
     /* Unbind anything still bound */
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);    
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 }
     

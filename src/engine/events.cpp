@@ -13,10 +13,15 @@ using namespace std;
 /* Helper directives for prettier code, mainly for static functions */
 #define CURRENT_BUFFER (_instance->_current_buffer)
 #define LAST_BUFFER (_instance->_current_buffer ^ 1)
-#define GET_KEY(buffer, keycode) (_instance->_key_buffer[buffer][(uint16_t)keycode >> 3] & (1 << ((uint16_t)keycode & 0b0111)))
+#define GET_KEY(buffer, keycode) (_instance->_key_buffer[buffer][static_cast<uint16_t>(key) >> 3] & (1 << (static_cast<uint8_t>(key) & 0b0111)))
 #define GET_BUTTON(buffer, button) (_instance->_mouse_button_buffer[buffer] & (1 << ((uint8_t)button & 0b0111)))
 
-events::events() {
+events::events() 
+    : _current_buffer(0) {
+
+    _key_buffer[0] = array<uint8_t, 8192>();
+    _key_buffer[1] = array<uint8_t, 8192>();
+
     _instance = this;
 }
 
@@ -41,9 +46,9 @@ void events::apply_callbacks(game_window& window) {
 
         /* Since this app is strictly single-window, info about it can be safely ignored */
         if (action == GLFW_PRESS)
-            _instance->_key_buffer[_instance->_current_buffer][((uint16_t)key >> 3)] |= (1 << ((uint8_t)key & 0b0111));
+            _instance->_key_buffer[_instance->_current_buffer][static_cast<uint16_t>(key) >> 3] |= (1 << (static_cast<uint8_t>(key) & 0b0111));
         else if (action == GLFW_RELEASE)
-            _instance->_key_buffer[_instance->_current_buffer][((uint16_t)key >> 3)] &= ~(1 << ((uint8_t)key & 0b0111));
+            _instance->_key_buffer[_instance->_current_buffer][ static_cast<uint16_t>(key) >> 3] &= ~(1 << (static_cast<uint8_t>(key) & 0b0111));
     });
 
     glfwSetCursorPosCallback(window.props().glfw_handle, [](GLFWwindow* window, double x, double y) {
@@ -60,7 +65,7 @@ void events::apply_callbacks(game_window& window) {
 void events::process_frame() {
 
     /* Swap buffers */
-    _current_buffer = (_current_buffer + 1) % 2; 
+    _current_buffer ^= 1; 
     glfwPollEvents();
 }
 

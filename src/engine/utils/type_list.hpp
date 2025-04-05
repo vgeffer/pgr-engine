@@ -1,6 +1,7 @@
 #pragma once 
 
-#include <vector>
+#include <unordered_map>
+
 namespace utils {
 
     template <class _T>
@@ -12,19 +13,22 @@ namespace utils {
             ~type_list() = default;
 
             template<typename T>
-                _T& get() { return _storage.at(_type_id<T>()); }
+               inline _T& get() { return _storage.at(_type_id<T>()); }
                 
             template <typename T>
-                bool has() const { return _type_id<T>() < _storage.size(); }
+                inline bool has() const { return _storage.find(_type_id<T>()) != _storage.cend(); }
 
-            std::vector<_T>& get_all() { return _storage; }
+            inline std::unordered_map<int, _T>& get_all() { return _storage; }
 
             template<typename T>
-                void set(_T& val) { _storage[_type_id<T>()] = val; }
+                inline void set(const _T& val) { _storage[_type_id<T>()] = val; }
+
+            template<typename T>
+                inline void set(_T&& val) { _storage[_type_id<T>()] = std::move(val); }
 
         private:
             inline static unsigned _last_id = 0;
-            std::vector<_T> _storage;
+            std::unordered_map<int, _T> _storage;
 
             template <typename T>
                 unsigned _type_id() const {

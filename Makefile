@@ -9,9 +9,9 @@ projects := $(shell realpath --relative-to=$(SOURCE_DIR) $(strip $(shell dirname
 project_builds := 
 
 
+
 $(projects):
 	make -C $(SOURCE_DIR)/$@ -f project.mk BASE_DIR=$(BASE_DIR) PROJECT=$@ OUT_DIR=$(BASE_DIR) BUILD_DIR=$(BASE_DIR)/.tmp SOURCE_DIR=$(SOURCE_DIR)
-
 
 .PHONY: all
 all: $(projects)

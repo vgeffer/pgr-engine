@@ -1,19 +1,18 @@
 #include "renderer.hpp"
 #include "../utils/project_settings.hpp"
-#include "../utils/algorithms.hpp"
 #include "../runtime.hpp"
 #include "mesh.hpp"
+#include <GL/gl.h>
+#include <glm/ext/matrix_float4x4.hpp>
 #include <glm/ext/scalar_constants.hpp>
 #include <glm/fwd.hpp>
 #include <memory>
 #include <stdexcept>
-#include <stack>
 #include <utility>
 #include <vector>
+#include <glm/gtc/type_ptr.hpp>
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtx/norm.hpp>
-
-#include <iostream>
 
 using namespace std;
 using namespace glm;
@@ -22,9 +21,11 @@ using namespace utils;
 using namespace assets;
 using namespace rendering;
 
+/* Constants */
+const GLint CAMERA_UBO_BINDING = 0;
+const GLint MATERIAL_UBO_BINDING = 1;
 
-renderer::renderer()
-    : _draw_list(nullptr) {
+renderer::renderer() {
 
     if (_instance != nullptr)
         throw logic_error("Renderer already initialised");
@@ -55,6 +56,10 @@ renderer::renderer()
     /* Load shader */
     _pp_vertex_stage = asset::load<shader_stage>("shaders/postprocess.vert", asset::caching_policy::KEEPALIVE);
 
+    /* Create objects */
+    glGenVertexArrays(1, &_pp_quad_vao);
+    glGenBuffers(1, &_pp_quad_vbo);
+
     /* Assign to OGL objects */
     glBindVertexArray(_pp_quad_vao);
        
@@ -68,7 +73,8 @@ renderer::renderer()
     );
 
 
-    glVertexAttribPointer(_pp_vertex_stage->attribute_location("vertices"), 2, GL_FLOAT, false, 0, 0);
+    glVertexAttribPointer(_pp_vertex_stage->attribute_location("vertex"), 2, GL_FLOAT, false, 0, 0);
+    glEnableVertexAttribArray(_pp_vertex_stage->attribute_location("vertex"));
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     glBindVertexArray(0);   
 }
@@ -211,30 +217,54 @@ void renderer::remove_postprocess_pass(size_t index) {
     else glDeleteRenderbuffers(1, &pp.pp_depth_buffer);
 }
 
+void renderer::insert_mesh(observer_ptr<mesh_instance>&& mesh) {
+
+    _draw_list.emplace_back(mesh);
+}
+
 /* This... this is gonna be a big one */
 void renderer::draw_scene(camera& camera) {
 
     /* Main camera && Postprocess is enabled */
-    if (camera.render_target() < 0 && !_pp_passes.empty())
+    if (!_pp_passes.empty())
         glBindFramebuffer(GL_FRAMEBUFFER, _pp_passes[0].pp_fbo); /* Bind FBO */
-
-    /* Not main camera, rendering to a texture */
-    else if (camera.render_target() >= 0)
-        glBindFramebuffer(GL_FRAMEBUFFER, camera.render_target());
-
+    
+    /* TODO: Render textures */
+    
     /* Clear buffer */
     glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
 
-    mesh_instance* to_draw = _draw_list;
-    GLuint currently_bound_vao = 0;
+    /* Update view matrix uniform */
+    glBindBuffer(GL_UNIFORM_BUFFER, camera.matrix_buffer());
+    glBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(mat4x4), value_ptr(camera.view()));
+    glBindBuffer(GL_UNIFORM_BUFFER, 0);
+    
+    /* Bind camera's matrix to the correct UBO  - optimize binding */
+    glBindBufferBase(GL_UNIFORM_BUFFER, CAMERA_UBO_BINDING, camera.matrix_buffer());
+
+
+    auto draw_iter = _draw_list.begin();
+    GLuint currently_bound_vao = -1;
 
     //===============================
     // PASS 1 - Opaque objects
     //===============================
-    for (; to_draw != nullptr; to_draw = to_draw->next()) {
-        
+    glBindProgramPipeline(_gl_pipeline);
+    for (; draw_iter != _draw_list.end(); draw_iter++) {
+
+        /* Underlying object was already deleted, delete it */
+        auto to_draw = *draw_iter;
+
+        if (!to_draw.valid()) {
+            draw_iter = _draw_list.erase(draw_iter);
+            
+            /* If the item was last, end the list */
+            if (draw_iter == _draw_list.end())
+                break;
+        }
+
         /* Reached transparent objects, end the pass */
-        if (to_draw->mat.modulate().a < 1.0f)
+        if (to_draw->mat->transparent())
             break; 
 
         /* Check if model is supposed to be drawn */
@@ -242,45 +272,43 @@ void renderer::draw_scene(camera& camera) {
             continue; 
 
         /* Bind up matrices & materials */
-        
-        /* Binding up */
         _set_uniform("mat_model", to_draw->model_mat());
+        to_draw->mat->use();
 
         /* Draw! */
         const GLuint vao = to_draw->drawable->vao();
-
         if (vao != currently_bound_vao)
             glBindVertexArray((currently_bound_vao = vao));
 
         const GLuint mode = to_draw->drawable->mode();    
-        if (mode != GL_TRIANGLE_STRIP || mode != GL_TRIANGLE_FAN)
-            glDrawElements(mode, to_draw->drawable->element_count(), GL_UNSIGNED_INT, static_cast<void*>(0));
+        if (mode != GL_TRIANGLE_STRIP && mode != GL_TRIANGLE_FAN)
+            glDrawElements(mode, to_draw->drawable->element_count(), GL_UNSIGNED_INT, reinterpret_cast<void*>(0));
         else glDrawArrays(mode, 0, to_draw->drawable->element_count());
     } 
 
     //===============================
     // PASS 2 - Transparent objects
     //===============================
-    if (to_draw != nullptr) /* Sort only when there is something to sort */
-        utils::linklist_sort<mesh_instance>(to_draw, [&](mesh_instance* a, mesh_instance* b) {
-
-            if (!a) return 1;
-            if (!b) return -1;
+    if (draw_iter != _draw_list.cend()) /* OIT - No sorting neceseary, only check if an oit step needs to be performed */
+        ;
+    
+    for (; draw_iter != _draw_list.cend(); draw_iter++) {
+    
+        auto to_draw = *draw_iter;
+        
+        /* Underlying object was already deleted, delete it */
+        if (!to_draw.valid()) {
+            draw_iter = _draw_list.erase(draw_iter);
             
-            float a_dist2 = length2(camera.position() - reinterpret_cast<scene_node*>(a)->position());
-            float b_dist2 = length2(camera.position() - reinterpret_cast<scene_node*>(b)->position());
+            /* If the item was last, end the list */
+            if (draw_iter == _draw_list.end())
+                break;
+        }
 
-            return a_dist2 >= b_dist2 ? (a_dist2 > b_dist2 ? -1 : 0) : 1;
-        });
-    
-    for (; to_draw != nullptr; to_draw = to_draw->next()) {
-    
         if (!to_draw->draw_enqueued())
             continue;
 
-
-
-            /* Binding up */
+        /* Binding up */
         _set_uniform("mat_model", to_draw->model_mat());
 
         /* Draw! */
@@ -298,7 +326,8 @@ void renderer::draw_scene(camera& camera) {
     //===============================
     // PASS 3 - Post-processing 
     //===============================
-    if (camera.render_target() < 0 && !_pp_passes.empty()) {
+    if (!_pp_passes.empty()) {
+
         size_t current_pass_idx = 0,
             next_pass_idx = 1;
         
@@ -322,7 +351,7 @@ void renderer::draw_scene(camera& camera) {
             glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 
             /* Last pass was rendered, end */
-            if (_pp_passes.size() <= next_pass_idx)
+            if (_pp_passes.size() >= next_pass_idx)
                 break;
             
             current_pass_idx = next_pass_idx;
@@ -364,7 +393,7 @@ vector<pair<GLuint, GLint>> renderer::uniform_location(string name) const {
 
 void renderer::_attach_stage(shared_ptr<shader_stage>& stage) {
 
-    for (int i = 0; i < _attached_shader_stages.size(); i++) {
+    for (size_t i = 0; i < _attached_shader_stages.size(); i++) {
 
         /* Stage exists, replace */
         if (_attached_shader_stages[i]->type_bitmask() == stage->type_bitmask()) {
@@ -383,7 +412,7 @@ void _set_texture(std::string texture_name, std::shared_ptr<assets::texture> tex
 
 }
 
-void renderer::_set_uniform(std::string uniform_name, int& val) {
+void renderer::set_uniform(std::string uniform_name, const int& val) {
 
     auto found_locations = uniform_location(uniform_name);
     if (found_locations.size() <= 0)
@@ -396,7 +425,21 @@ void renderer::_set_uniform(std::string uniform_name, int& val) {
         );
 }
 
-void renderer::_set_uniform(std::string uniform_name, glm::mat3x3& mat) {
+template <float>
+void renderer::set_uniform(std::string uniform_name, const float& val) {
+
+    auto found_locations = uniform_location(uniform_name);
+    if (found_locations.size() <= 0)
+        return;
+
+    for (auto [program, location] : found_locations)
+        glProgramUniform1i(
+            program, location, 
+            val
+        );
+}
+
+void renderer::_set_uniform(std::string uniform_name, const glm::mat3x3& mat) {
 
     auto found_locations = uniform_location(uniform_name);
     if (found_locations.size() <= 0)
@@ -406,7 +449,7 @@ void renderer::_set_uniform(std::string uniform_name, glm::mat3x3& mat) {
         glProgramUniformMatrix3fv(
             program, location, 
             1, GL_FALSE, 
-            &mat[0][0]
+            glm::value_ptr(mat)
         );
 }
 
@@ -420,6 +463,6 @@ void renderer::_set_uniform(std::string uniform_name, const glm::mat4x4& mat) {
         glProgramUniformMatrix4fv(
             program, location, 
             1, GL_FALSE, 
-            &mat[0][0]
+            glm::value_ptr(mat)
         );
 }

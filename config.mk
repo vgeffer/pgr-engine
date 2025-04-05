@@ -31,8 +31,8 @@ PLATFORM_FLAGS.i386		:= -m32
 FILENAME_EXT.debug		:= _dbg
 FILENAME_EXT.release	:= # Empty
 
-EXTRA_FLAGS.debug		:= -g -Og -ggdb -Wall
-EXTRA_FLAGS.release 	:= -O2 -DNDEBUG
+EXTRA_FLAGS.debug		:= -g -Og -ggdb -Wall -pedantic
+EXTRA_FLAGS.release 	:= -O2 -DNDEBUG -ftree-vectorize
 
 # Flags for use in makefiles
 BUILD_FLAGS := $(PLATFORM_FLAGS.$(TARGET_ARCH)) $($(COMPILER)FLAGS_COMMON) $(EXTRA_FLAGS.$(BUILD_TARGET)) $(EXTRA_BUILD_FLAGS)

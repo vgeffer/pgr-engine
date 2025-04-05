@@ -5,11 +5,9 @@
 
 
 namespace assets {
-    class scene : public asset {
+    class scene : asset {
         public:
             scene(std::string path);
-
-
             nodes::scene_node* instantiate();
     };
 };

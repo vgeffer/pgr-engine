@@ -58,11 +58,12 @@ namespace nodes {
             bool in_active_scene() const { return _in_scene; };
 
             inline glm::vec3 position() const { return _position; }
-            inline glm::quat rotation() const { return _rotation; }
-            inline glm::vec3 scale() const { return _scale; }
-
             glm::vec3 position(const glm::vec3& position);
-            glm::quat rotation(const glm::quat& rotation); 
+            
+            inline glm::quat rotation() const { return _rotation; }
+            glm::quat rotation(const glm::quat& rotation);
+
+            inline glm::vec3 scale() const { return _scale; }
             glm::vec3 scale(const glm::vec3& scale); 
 
         protected:

@@ -1,5 +1,5 @@
 #include "video_mode.hpp"
-#include <stdexcept>
+#include <exception>
 #include <string>
 #include "../assets/resource.hpp"
 
@@ -20,8 +20,7 @@ video_mode::video_mode(string path, const video_mode& fallback) {
         antialias = config.deserialize<aa_level>("video/aa_level");
         is_vsync = config.deserialize<bool>("video/vsync");
 
-
-    } catch (runtime_error& e) {
+    } catch (exception& e) {
 
         w = fallback.w;
         h = fallback.h;

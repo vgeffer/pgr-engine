@@ -5,7 +5,7 @@
 #include <stdexcept>
 
 game_window::game_window(std::string title, video_mode& mode) 
-    : _props({.is_closing = false, .win_title = title, .current_mode = mode}) {
+    : _props({false, title, mode}) {
 
     if (!glfwInit())
         throw std::runtime_error("TEST");

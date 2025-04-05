@@ -21,7 +21,6 @@ static const unordered_map<string, GLenum> _ext_type_map = {
     {".vert", GL_VERTEX_SHADER}
 };
 
-/* TODO: Multistage linking */
 shader_stage::shader_stage(string path)
     : _type_bitmask(0) {
 
@@ -116,13 +115,15 @@ shader_stage::shader_stage(string path)
         throw runtime_error("Shader linking error"); 
     }   
     
-    /* Get attribs */
+    /* Get attribs - TODO: compact into loop */
     GLint attrib_count = 0,
-          uniform_count = 0;
+          uniform_count = 0,
+          uniform_block_count = 0;
     glGetProgramiv(_program, GL_ACTIVE_ATTRIBUTES, &attrib_count);
     glGetProgramiv(_program, GL_ACTIVE_UNIFORMS, &uniform_count);
+    glGetProgramiv(_program, GL_ACTIVE_UNIFORM_BLOCKS, &uniform_block_count);
 
-    GLint longest_attr, longest_uniform;
+    GLint longest_attr, longest_uniform, longest_uniform_block;
 
     /* Buffer to hold attribute names from OpenGL */
     glGetProgramiv(_program, GL_ACTIVE_ATTRIBUTE_MAX_LENGTH, &longest_attr);
@@ -132,38 +133,66 @@ shader_stage::shader_stage(string path)
     glGetProgramiv(_program,  GL_ACTIVE_UNIFORM_MAX_LENGTH, &longest_uniform);
     buffer<char> uniform_name = buffer<char>(longest_uniform);
 
+    /* Buffer to hold uniform_block names from OpenGL */
+    glGetProgramiv(_program,  GL_ACTIVE_UNIFORM_MAX_LENGTH, &longest_uniform_block);
+    buffer<char> uniform_block_name = buffer<char>(longest_uniform_block);
+
     /* Parse out attribs */
-    for (GLint i = 0; i < attrib_count; i++)
+    for (GLuint i = 0; i < static_cast<GLuint>(attrib_count); i++)
     {
         GLint attr_size;
         GLenum attr_type;
 
         /* Get attrib name */
-        glGetActiveAttrib(_program, (GLuint)i, longest_attr, NULL, &attr_size, &attr_type, attr_name);
+        glGetActiveAttrib(_program, i, longest_attr, NULL, &attr_size, &attr_type, attr_name);
 
         /* Reslove location */
         GLint location = glGetAttribLocation(_program, attr_name);
+        
+        /* Skip invalid ones */
+        if (location < 0)
+            continue;
+        
+        std::cout << path << " - " << attr_name << ": "  << location << std::endl;
 
         /* Push to attr map - TODO: maybe save type aswell */
         _used_attrib_locations[string(attr_name)] = location;
     }
 
     /* Parse out uniforms */
-    for (GLint i = 0; i < uniform_count; i++)
+    for (GLuint i = 0; i < static_cast<GLuint>(uniform_count); i++)
     {
-        GLint uniform_size;
-        GLenum uniform_type;
-
         /* Get uniform name */
-        glGetActiveUniform(_program, (GLuint)i, longest_attr, NULL, &uniform_size, &uniform_type, attr_name);
+        glGetActiveUniformName(_program, i, longest_uniform, NULL, uniform_name);
 
         /* Reslove location */
-        GLint location = glGetUniformLocation(_program, attr_name);
+        GLint location = glGetUniformLocation(_program, uniform_name);
 
+        /* Skip invalid ones */
+        if (location < 0) continue;
+
+        std::cout << path << " - " << uniform_name << ": "  << location << std::endl;
         /* Push to uniform map - TODO: maybe save type aswell */
-        _used_uniform_locations[string(attr_name)] = location;
+        _used_uniform_locations[string(uniform_name)] = location;
     }
 
+    /* Parse out uniform blocks */
+    for (GLuint i = 0; i < static_cast<GLuint>(uniform_block_count); i++)
+    {
+        /* Get uniform name */
+        glGetActiveUniformBlockName(_program, i, longest_uniform, NULL, uniform_name);
+
+        /* Reslove location */
+        GLint binding = glGetUniformBlockIndex(_program, uniform_name);
+
+        /* Skip invalid ones */
+        if (binding < 0)
+            continue;
+
+        std::cout << path << " - " << uniform_name << ": "  << binding << std::endl;
+        /* Push to uniform map - TODO: maybe save type aswell */
+        _used_uniform_block_bindings[string(uniform_name)] = binding;
+    }
     /* Clean up */
     glDetachShader(_program, shader);
     glDeleteShader(shader);
@@ -185,6 +214,13 @@ GLint shader_stage::attribute_location(string name) const {
 GLint shader_stage::uniform_location(string name) const {
 
     if (auto iter = _used_uniform_locations.find(name); iter != _used_uniform_locations.cend())
+        return iter->second;
+    return -1;
+}
+
+GLint shader_stage::uniform_block_binding(string name) const {
+
+    if (auto iter = _used_uniform_block_bindings.find(name); iter != _used_uniform_block_bindings.cend())
         return iter->second;
     return -1;
 }
