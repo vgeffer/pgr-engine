@@ -1,6 +1,7 @@
 ///
 /// @file observer_ptr.hpp
 /// @author geffevil
+/// @brief A custom smart pointer allowing to have one owner of the data and several readers of that data
 ///
 #pragma once
 
@@ -135,6 +136,9 @@ namespace utils {
             template<typename _D, typename _S> friend observer_ptr<_D> observer_cast(observer_ptr<_S>&& ptr); /* For the private constructor */
             
             public:
+                observer_ptr()
+                    : _data(nullptr), _state(nullptr) {}
+
                 ~observer_ptr() { 
 
                     /* This object was moved and has it's state taken over */
@@ -169,6 +173,17 @@ namespace utils {
                 }
 
                 inline bool valid() const { return _state != nullptr && _state->ptr_valid; }
+
+                constexpr observer_ptr<_T>& operator=(const observer_ptr<_T>& other) {
+                
+                    _data = other._data;
+                    _state = other._state;
+
+                    if (_state != nullptr)
+                        _state->active_observers++;
+
+                    return *this;
+                }
 
                 _T& operator*() { 
 
