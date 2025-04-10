@@ -22,7 +22,6 @@ workspace "pgr-engine"
         }
 
         links { "glad:static", "glm:shared", "glfw:shared", "assimp:shared" }
-        buildoptions { "-pipe", "-fPIC", "-Wall" }
         includedirs { "src/lib" }
 
         filter "configurations:Debug"
