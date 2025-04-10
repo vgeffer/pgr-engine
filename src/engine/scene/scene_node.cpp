@@ -1,32 +1,59 @@
 #include "scene_node.hpp"
+#include <glm/detail/type_quat.hpp>
+#include <glm/ext/matrix_float4x4.hpp>
 #include <glm/ext/matrix_transform.hpp>
 #include <glm/fwd.hpp>
+#include <iostream>
 #include <stdexcept>
+#include <vector>
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtx/quaternion.hpp>
 
-#include "../rendering/mesh.hpp"
-#include "../rendering/renderer.hpp"
-
 using namespace std;
 using namespace glm;
-using namespace nodes;
+using namespace scene;
+using namespace utils;
+using namespace nlohmann;
 
-
-static mat4x4 _calc_model_mat(const vec3& pos, const quat& rot, const vec3& scl) {
-
-    return scale(
-        translate(identity<mat4x4>(), pos) * toMat4(rot),
-        scl
-    );
-}
-        
 scene_node::scene_node()
     : scene_node(scene_node::node_type::GENERIC) {}
 
 scene_node::scene_node(scene_node::node_type type)
     : _parent(nullptr), _enabled(true), _in_scene(type == node_type::ROOT), _type(type), _position(vec3(0,0,0)), _scale(vec3(1,1,1)), 
-      _rotation(quat(0,0,0,0)), _model_mat(_calc_model_mat(vec3(0,0,0), quat(0,0,0,0), vec3(1,1,1))) {}
+      _rotation(quat(0,0,0,0)) {}
+
+scene_node::scene_node(const resource& res)
+    : _parent(nullptr), _enabled(true), _in_scene(false), _type(node_type::GENERIC) {
+
+    _position = res.deserialize<vec3>("position", vec3(0, 0, 0));
+    _rotation = res.deserialize<quat>("rotation", quat(0, 0, 0, 0));
+    _scale = res.deserialize<vec3>("scale", vec3(1, 1, 1));
+
+    _children = res.deserialize<vector<scene_node*>>("children", vector<scene_node*>());
+
+    /* Parse out node components */
+    json component_map = res.deserialize<json>("components", {});
+    for (auto [name, component] : component_map.items()) {
+
+        auto spawner = _internal::component_registry::registered_components.find(name);
+        if (spawner == _internal::component_registry::registered_components.end()) {
+            std::cerr << "Unknown component " << name << " skipping!\n";     
+            continue;
+        }
+
+        /* Call the spawner fn */
+        spawner->second(*this, component);
+    }
+}
+
+scene_node::~scene_node() {
+
+    if (!_in_scene)
+        return;
+    
+    for (auto& [id, component] : _components.get_all())
+        component->scene_exit();
+}
 
 void scene_node::node_update(float delta) {
 
@@ -57,21 +84,12 @@ scene_node* scene_node::child(size_t index) const {
     return _children.at(index);
 }
 
-vec3 scene_node::position(const glm::vec3& position) {
-    _model_mat = _calc_model_mat(position, _rotation, _scale);
-    return _position = position;
-}
+mat4x4 scene_node::model_mat() const {
 
-quat scene_node::rotation(const glm::quat& rotation) {
-    _model_mat = _calc_model_mat(_position, rotation, _scale);
-    return _rotation = rotation;
-}
-
-vec3 scene_node::scale(const glm::vec3& scale) {
-
-    _model_mat = _calc_model_mat(_position, _rotation, scale);
-    /* TODO: If non-uniform, recompute normals */
-    return _scale = scale;
+    return glm::scale(
+        translate(identity<mat4x4>(), _position) * toMat4(_rotation),
+        _scale
+    );
 }
 
 void scene_node::_on_scene_enter() {
@@ -79,15 +97,9 @@ void scene_node::_on_scene_enter() {
     /* Set in_scene flag */
     _in_scene = true;
 
-    /* Special actions to hand off components to core structures */
-    /* TODO: figure out how to mush this to component->on_scene_enter */
-    if (_components.has<rendering::mesh_instance>())
-        rendering::renderer::instance()->insert_mesh(component<rendering::mesh_instance>());
-
-
     /* All components now enter scene */
     for (auto& [id, component] : _components.get_all())
-        component->on_scene_enter();
+        component->scene_enter();
 
     /* Every child has now also entered scene */
     for (auto& child : _children)

@@ -1,19 +1,18 @@
 #pragma once
 #include "../../lib/glad/glad.h"
-#include "scene_node.hpp"
+#include "../scene/scene_node.hpp"
 #include <glm/fwd.hpp>
 #include <glm/glm.hpp>
 
 
-namespace nodes {
-    class camera : public scene_node {
+namespace rendering {
+    class camera : public scene::node_component {
     
         public:
+            camera(const utils::resource& res);
             camera(float fov, float near, float far);
             ~camera() override;
 
-            void look_at(glm::vec3 target);
-            
             glm::mat4x4 view() const;
             glm::mat4x4 projection() const;
 
@@ -31,6 +30,8 @@ namespace nodes {
             inline float far(float& far);
 
             inline GLuint matrix_buffer() const { return _matrix_buffer; }
+
+            void look_at(glm::vec3 target);
 
         private:
             float _fov, _near, _far;

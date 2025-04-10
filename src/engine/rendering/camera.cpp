@@ -1,4 +1,3 @@
-#include "scene_node.hpp"
 #include <cmath>
 #include <glm/ext/matrix_clip_space.hpp>
 #include <glm/ext/matrix_float4x4.hpp>
@@ -15,17 +14,27 @@
 #include "../runtime.hpp"
 
 using namespace glm;
-using namespace nodes;
+using namespace rendering;
+
+constexpr vec3 UP = vec3(0, 1, 0);
+constexpr vec3 FORWARD = vec3(0, 0, -1);
+
+REGISTER_COMPONENT(camera);
+camera::camera(const utils::resource& res)
+    : camera(
+        res.deserialize<float>("fov", 70.0f),
+        res.deserialize<float>("near", 0.01f),
+        res.deserialize<float>("far", 100.0f)
+    ) {}
 
 camera::camera(float fov, float near, float far) 
-    : scene_node(node_type::CAMERA), _fov(fov), _near(near), _far(far) {
+    : scene::node_component(), _fov(fov), _near(near), _far(far) {
 
     glGenBuffers(1, &_matrix_buffer);
     glBindBuffer(GL_UNIFORM_BUFFER, _matrix_buffer);
     glBufferData(GL_UNIFORM_BUFFER, 2 * sizeof(glm::mat4x4), NULL, GL_STATIC_DRAW); /* Alloc size for two matrices */
     glBufferSubData(GL_UNIFORM_BUFFER, sizeof(mat4x4), sizeof(mat4x4), value_ptr(projection())); /* Push in default projection */
     glBindBuffer(GL_UNIFORM_BUFFER, 0);
-    /* TODO: constants */
 }
 
 camera::~camera() {
@@ -35,7 +44,7 @@ camera::~camera() {
 
 mat4x4 camera::view() const {
 
-    return lookAt(position(), position() + forward(), up());
+    return lookAt(_parent->position(), _parent->position() + forward(), up());
 }
 
 mat4x4 camera::projection() const {
@@ -47,11 +56,11 @@ mat4x4 camera::projection() const {
 }
 
 vec3 camera::up() const {
-    return normalize(toMat3(rotation()) * vec3(0, 1, 0));
+    return normalize(toMat3(_parent->rotation()) * UP);
 }
 
 vec3 camera::forward() const {
-   return normalize(toMat3(rotation()) * vec3(0, 0, -1));
+   return normalize(toMat3(_parent->rotation()) * FORWARD);
 }
 
 /* Upload projection matrix to OpenGL only when dirty */
@@ -87,7 +96,6 @@ float camera::far(float& far) {
 }
 
 /*
-
 
 angle = atan2( vector.x, vector.z ) // Note: I expected atan2(z,x) but OP reported success with atan2(x,z) instead! Switch around if you see 90° off.
 qx = 0
