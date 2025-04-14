@@ -1,5 +1,6 @@
 workspace "pgr-engine"
     configurations { "Debug", "Release" }
+    flags { "MultiProcessorCompile" }
     location "build"
 
     project "glad"

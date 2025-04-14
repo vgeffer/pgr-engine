@@ -1,6 +1,10 @@
 #include "texture.hpp"
+#include <algorithm>
 #include <stdexcept>
+#include <array>
+#include <utility>
 #include "../utils/project_settings.hpp"
+#include "../rendering/renderer.hpp"
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "../../lib/stb/stb_image.h"
@@ -9,38 +13,81 @@ using namespace std;
 using namespace utils;
 using namespace assets;
 
+constexpr array<pair<GLenum, GLenum>, 4> IMAGE_FORMAT = { 
+    make_pair(GL_R8, GL_RED), 
+    make_pair(GL_RG8, GL_RG), 
+    make_pair(GL_RGB8, GL_RGB),
+    make_pair(GL_RGBA8, GL_RGBA) 
+};
 
-texture::texture(const std::string name) {
+
+texture::texture()
+    : m_texture_obj(0), m_texture_index(-1), m_w(0), m_h(0), m_channels(0) {std::cout << "EFG" << std::endl; }
+
+texture::texture(const std::string name) 
+    : m_texture_index(-1) {
     
-    uint8_t* data = stbi_load(name.c_str(), &_w, &_h, &_channels, 4);
-    if (data == NULL)
+    uint8_t* img_data = stbi_load(name.c_str(), &m_w, &m_h, &m_channels, 4);
+    if (img_data == NULL)
         throw std::runtime_error("Image " + name + " not found or corrupted");
 
     /* Create OpenGL texture object */ 
-    glGenTextures(1, &_tex_id);
-    glBindTexture(GL_TEXTURE_2D, _tex_id);
+    glCreateTextures(GL_TEXTURE_2D, 1, &m_texture_obj);
+
+    glTextureParameteri(m_texture_obj, GL_TEXTURE_MIN_FILTER, project_settings::tex_min_filter());
+    glTextureParameteri(m_texture_obj, GL_TEXTURE_MAG_FILTER, project_settings::tex_mag_filter());
+    glTextureParameteri(m_texture_obj, GL_TEXTURE_WRAP_S, GL_REPEAT);
+    glTextureParameteri(m_texture_obj, GL_TEXTURE_WRAP_T, GL_REPEAT);
             
-    /* Set texture parameters -> TODO: allow user selection */
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, project_settings::tex_min_filter());
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, project_settings::tex_mag_filter());
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-            
+    /* Calculate number of mipmap levels */
+    int mip_levels = static_cast<int>(min(5.0f, log2f(static_cast<float>(max(m_w, m_h)))));
+
     /* Send image to OpenGL */
-    glTexImage2D(
-        GL_TEXTURE_2D, 0, 
-        GL_RGBA, 
-        _w, _h, 0, 
-        (_channels == 4 ? GL_RGBA : GL_RGB), 
-        GL_UNSIGNED_BYTE, data
+    glTextureStorage2D(m_texture_obj, mip_levels, IMAGE_FORMAT[m_channels - 1].first, m_w, m_h);
+    glTextureSubImage2D(
+        m_texture_obj, 
+        0, 0, 0, 
+        m_w, m_h, 
+        IMAGE_FORMAT[m_channels - 1].second, 
+        GL_UNSIGNED_BYTE, img_data
     );
-            
-    glGenerateMipmap(GL_TEXTURE_2D);
-    glBindTexture(GL_TEXTURE_2D, 0);   
-    stbi_image_free(data);  
+
+    /* Create b&w image, not just R */
+    if (m_channels == 1) {
+        GLint swizzle[] = { GL_RED, GL_RED, GL_RED, GL_RED };
+        glTextureParameteriv(m_texture_obj, GL_TEXTURE_SWIZZLE_RGBA, swizzle);
+    }
+
+    glGenerateTextureMipmap(m_texture_obj);
+    m_texture_handle = glGetTextureHandleARB(m_texture_obj);
+    stbi_image_free(img_data);  
 }
  
+void texture::use() {
+    
+    /* Texture is already in use, no need to redo */
+    if (m_texture_index >= 0)
+        return;
+
+    /* Make texture resindent & pass it to the renderer */
+    glMakeTextureHandleResidentARB(m_texture_handle);
+
+    auto [handle, offset] = rendering::renderer::instance()->texture_allocator().alloc_buffer(sizeof(m_texture_handle));
+    rendering::renderer::instance()->texture_allocator().buffer_data(handle, sizeof(m_texture_handle), &m_texture_handle);
+
+    /* Calculate index */
+    m_texture_index = offset / sizeof(m_texture_handle);
+    m_buffer_handle = handle;
+}
+
 texture::~texture() {
-        
-    glDeleteTextures(1, &_tex_id);
+     
+    /* If rexture was in use, unbind it */
+    if (m_texture_index >= 0) {
+     
+        glMakeTextureHandleNonResidentARB(m_texture_handle);
+        rendering::renderer::instance()->texture_allocator().free_buffer(m_buffer_handle);
+    }
+
+    glDeleteTextures(1, &m_texture_obj);
 }
