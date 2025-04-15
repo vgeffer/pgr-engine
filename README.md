@@ -37,5 +37,8 @@ Copyright (c) 2013-2025 Niels Lohmann, licensed under [MIT](https://github.com/n
 This project uses and redistributes [```glad```](https://github.com/Dav1dde/glad) OpenGL Loader <br />
 Copyright (c) 2013-2022 David Herberth, licensed under [MIT](https://github.com/Dav1dde/glad/blob/glad2/LICENSE) License
 
+This project uses and redistributes [```nuklear```](https://github.com/Immediate-Mode-UI/Nuklear), UI library <br /> 
+Copyright (c) 2017 Micha Mettke, licensed under [MIT](https://github.com/Immediate-Mode-UI/Nuklear/blob/master/LICENSE) License
+
 This project uses and redistributes parts of the Khronos Specifications (as a part of glad) <br />
 Copyright (c) 2013-2020 The Khronos Group Inc, licensed under [Apache License v. 2.0](https://github.com/Dav1dde/glad/blob/glad2/LICENSE)
