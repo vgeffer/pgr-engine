@@ -3,47 +3,34 @@
 /// @author geffevil
 ///
 
-#include "runtime.hpp"
-#include "window/video_mode.hpp"
-#include "game_window.hpp"
-#include "utils/project_settings.hpp"
-#include <exception>
-#include <iostream>
+#include "engine_app.hpp"
+#include <string>
+#include <string_view>
 
-using namespace std;
-using namespace utils;
-
-/**
- * Default video mode to use when config fails to load
- */
-const video_mode default_mode = video_mode(1280, 720, window_mode::WINDOW, aa_level::OFF, false);
-
-
-/**
- * @brief Entry point
- * Main function
- */
-int main(int argc, char** argv) {
-        
-    /* Parse cmd args */
-    for (int i = 0; i < argc; i++) {
-            
-    }
+#define PARSE_ARG(name, type, var) \
+    if (std::string_view(argv[arg]) == name && arg < argc - 1) \
+        var = type(argv[++arg]);    
     
-    try {
-        
-        utils::project_settings settings("project.json");
-        video_mode vid_mode = video_mode("video.json", default_mode);
-        game_window window = game_window("Test-Title", vid_mode);
-        engine_runtime runtime = engine_runtime(window);
+/// @brief Entry point
+///
+/// Main function
+int main(int argc, char** argv) {    
 
-        runtime.start();
+    /* Defaults */
+    std::string project_path = "project.json";
 
-    } catch (exception& e) {
-
-        cerr << e.what() << endl;
-        return -1;   
+    /* Arg parsing */
+    for (int arg = 0; arg < argc; arg++) {
+        PARSE_ARG("--project", std::string, project_path);
     }
 
-    return 0;
+    application::exit_status status;
+    while (true) {
+        application app = application(project_path);
+
+        if ((status = app.run()) != application::exit_status::RELOAD)
+            break; /* App is not being reloaded, end */
+    }
+
+    return static_cast<int>(status);
 }

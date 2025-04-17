@@ -2,105 +2,87 @@
 #include "game_window.hpp"
 #include "window/video_mode.hpp"
 #include <GLFW/glfw3.h>
+#include <cstddef>
+#include <glm/ext/vector_int2.hpp>
 #include <stdexcept>
 
-game_window::game_window(std::string title, video_mode& mode) 
-    : _props({false, title, mode}) {
+game_window::game_window()
+    : m_props({false, "", video_mode(), nullptr}) {
 
+    /* Initialize GLFW */
     if (!glfwInit())
-        throw std::runtime_error("TEST");
+        throw std::runtime_error("GLFW context initialization failed!");
+}
+
+void game_window::create(const std::string& title, video_mode& mode) {
+
+    /* Destroy old window if needed */
+    if (m_props.glfw_handle != nullptr) {
+
+        glfwDestroyWindow(m_props.glfw_handle);
+    }
+
+    /* Setup new window */
+    m_props = game_window::window_props_t{
+        false, 
+        title, 
+        mode,
+        nullptr
+    };
 
     /* Get primary monitor vidmode */
     const GLFWvidmode* glfw_vidmode = glfwGetVideoMode(glfwGetPrimaryMonitor());    
-    if (glfw_vidmode == NULL)
-            throw std::runtime_error("<GLFW-VIDMODE-ERROR>");
-        
-    /* Resolve VidMode params */
-    int width = _props.current_mode.win_mode == window_mode::BORDERLESS ? glfw_vidmode->width : _props.current_mode.w;
-    int height = _props.current_mode.win_mode == window_mode::BORDERLESS ? glfw_vidmode->height : _props.current_mode.h;
-    _apply_default_hints();
+    if (glfw_vidmode == nullptr)
+            throw std::runtime_error("Unable to retrieve GLFW video mode");
+     
 
-    _props.glfw_handle = glfwCreateWindow(
-        width,
-        height,
+    /* Resolve VidMode params */
+    glm::ivec2 size = m_props.current_mode.win_mode() == video_mode::window_mode::BORDERLESS ? glm::ivec2(glfw_vidmode->width, glfw_vidmode->height) : 
+                                                                                               m_props.current_mode.size();
+    m_apply_default_hints();
+
+
+    m_props.glfw_handle = glfwCreateWindow(
+        size.x,
+        size.y,
         title.c_str(),
-        _props.current_mode.win_mode != window_mode::WINDOW ? glfwGetPrimaryMonitor() : NULL,
-        NULL
+        m_props.current_mode.win_mode() != video_mode::window_mode::WINDOW ? glfwGetPrimaryMonitor() : NULL,
+        nullptr
     );
 
-    if (_props.glfw_handle == NULL)
-        throw std::runtime_error("<ERROR->");
+    if (m_props.glfw_handle == NULL)
+        throw std::runtime_error("Window not initialized!");
     
     /* Apply callbacks */
-    if (_props.current_mode.is_vsync)
+    if (m_props.current_mode.vsync())
         glfwSwapInterval(1);
     
-    glfwMakeContextCurrent(static_cast<GLFWwindow*>(_props.glfw_handle));
-    
-    
+    glfwMakeContextCurrent(static_cast<GLFWwindow*>(m_props.glfw_handle));
+
     /* Initialize GLAD */
     if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
-        throw std::runtime_error("Unable to init GLAD!");
-    glfwShowWindow(static_cast<GLFWwindow*>(_props.glfw_handle));
+        throw std::runtime_error("OpenGL context initialization failed!");
+
+    glfwShowWindow(static_cast<GLFWwindow*>(m_props.glfw_handle));
 }
 
 game_window::~game_window() {
  
-    if (!_props.glfw_handle)
+    if (!m_props.glfw_handle)
         return;
     
-    glfwHideWindow(_props.glfw_handle);
-    glfwDestroyWindow(_props.glfw_handle);
+    glfwHideWindow(m_props.glfw_handle);
+    glfwDestroyWindow(m_props.glfw_handle);
+
     glfwTerminate();
 }
 
-void game_window::update_vidmode() {
-
-    if (_props.glfw_handle == NULL) 
-        throw std::logic_error("GLFW window not initialised!");
-    
-    /* Disable VSync */
-    glfwSwapInterval(0);
-
-    /* Hide & destroy the window */
-    glfwHideWindow(_props.glfw_handle);
-    glfwDestroyWindow(_props.glfw_handle);
-
-    /* Re-create window */
-    const GLFWvidmode* glfw_vidmode = glfwGetVideoMode(glfwGetPrimaryMonitor());
-    if (glfw_vidmode == NULL)
-        throw std::runtime_error("Changing vidmode failed!");
-    
-    int width = _props.current_mode.win_mode == window_mode::BORDERLESS ? glfw_vidmode->width : _props.current_mode.w;
-    int height = _props.current_mode.win_mode == window_mode::BORDERLESS ? glfw_vidmode->height : _props.current_mode.h;
-    
-    glfwDefaultWindowHints();
-    _apply_default_hints();
-    _props.glfw_handle = glfwCreateWindow(
-            width,
-            height,
-            _props.win_title.c_str(),
-            _props.current_mode.win_mode != window_mode::WINDOW ? glfwGetPrimaryMonitor() : NULL,
-            NULL
-    );
-
-    if (_props.glfw_handle == NULL)
-        throw std::runtime_error("<ERROR-GLFWCREATEWINDOW>");
-
-    /* Set callbacks */
-    //applyCallbacks();
-    if (_props.current_mode.is_vsync)
-        glfwSwapInterval(1);
-    
-    glfwMakeContextCurrent(_props.glfw_handle);
-    glfwShowWindow(_props.glfw_handle);
-}
-
 void game_window::close() {
-    _props.is_closing = true;
+    m_props.is_closing = true;
+    glfwHideWindow(m_props.glfw_handle);
 }
 
-void game_window::_apply_default_hints() {
+void game_window::m_apply_default_hints() {
 
     /* Done this way since they are applied in multiple places */
     glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
@@ -108,5 +90,5 @@ void game_window::_apply_default_hints() {
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4); 
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 6);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-    glfwWindowHint(GLFW_SAMPLES, (int)_props.current_mode.antialias);
+    glfwWindowHint(GLFW_SAMPLES, static_cast<int>(m_props.current_mode.antialias_level()));
 }
