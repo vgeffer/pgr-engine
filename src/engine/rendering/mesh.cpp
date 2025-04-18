@@ -1,35 +1,62 @@
 #include "mesh.hpp"
+#include "material.hpp"
+#include "renderer.hpp"
+#include <memory>
+#include <string_view>
+#include "../assets/model.hpp"
+#include "../assets/loader.hpp"
+#include "../assets/displacement.hpp"
 
 
 using namespace glm;
 using namespace rendering;
 
-mesh::mesh() 
-    : draw_mode(GL_TRIANGLES), el_count(0) {
+REGISTER_COMPONENT(mesh_instance);
 
-    glGenVertexArrays(1, &attr_buffer);        
-    glGenBuffers(1, &vertex_buffer);
-    glGenBuffers(1, &index_buffer);
-}
+mesh::mesh() 
+    : m_draw_mode(GL_TRIANGLES), m_indexed(false), m_element_count(0), 
+      m_first_vertex(0), m_first_index(0) {}
 
 mesh::~mesh() {
-
-    glDeleteVertexArrays(1, &attr_buffer);
-    glDeleteBuffers(1, &vertex_buffer);
-    glDeleteBuffers(1, &index_buffer);   
-}
-
-bool mesh_instance::draw_enqueued() {
+    renderer::instance()->vertex_allocator().free_buffer(m_vert_handle);
     
-    bool enqueued = _draw_enqueued;
-    _draw_enqueued = false;
-    return enqueued;
+    if (m_indexed)
+        renderer::instance()->element_allocator().free_buffer(m_elem_handle);
 }
 
-void mesh_instance::request_draw(const mat4x4& transform) {
+mesh_instance::mesh_instance(scene::scene_node* parent, const utils::resource& res)
+    : scene::node_component(parent), m_material(res.deserialize<material>("material", material())) {
 
-    _model_mat = transform;
-    _draw_enqueued = true;
+    std::string_view type = res.deserialize<std::string_view>("mesh/type");
+
+    /// @todo [Mid-Term] Maybe move to the asset loader? Or known model registry?
+    if (type == "model")
+        m_mesh = std::move(assets::loader::load<assets::model>(
+            res.deserialize<std::string>("mesh/path")
+        ));
+
+    else if (type == "displacement") {
+        m_mesh = std::move(assets::loader::load<assets::displacement>(
+            res.deserialize<std::string>("mesh/path")
+        ));
+    }
+    
+    else if (type == "raw_displacement")
+        m_mesh = std::make_shared<assets::displacement>(
+            res.deserialize<nlohmann::json>("mesh/data")
+        );
+
+    else throw std::runtime_error("Unknown mesh type encountered!");
 }
 
-void mesh_instance::on_scene_enter() { }
+void mesh_instance::scene_enter() { 
+
+    /* Enable material */
+    m_material.use();
+}
+
+void mesh_instance::prepare_draw(const glm::mat4x4& parent_transform) {
+
+    auto mesh = m_parent->component<mesh_instance>();
+    renderer::instance()->request_draw(mesh, parent_transform);
+}
