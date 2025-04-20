@@ -1,13 +1,17 @@
 #pragma once
-#include "../nodes/scene_node.hpp"
+#include "../scene/scene_node.hpp"
 #include "asset.hpp"
 #include <string>
 
 
 namespace assets {
-    class scene : asset {
+    class scene_template : public asset {
         public:
-            scene(std::string path);
-            nodes::scene_node* instantiate();
+            scene_template(const std::string path);
+            ~scene_template() override = default;
+
+            scene::scene_node* instantiate();
+        private:
+            utils::resource m_scene_res;
     };
 };

@@ -1,14 +1,14 @@
 #include "runtime.hpp"
-#include "assets/asset.hpp"
+#include "assets/loader.hpp"
+#include "assets/scene.hpp"
+#include "assets/shader.hpp"
 #include "events.hpp"
 #include "game_window.hpp"
-#include "nodes/scene_node.hpp"
+#include "scene/scene_node.hpp"
 #include "physics/physics.hpp"
-#include "rendering/mesh.hpp"
 #include "rendering/renderer.hpp"
-#include "utils/observer_ptr.hpp"
+#include "utils/logger.hpp"
 #include "utils/project_settings.hpp"
-#include "window/key_code.hpp"
 
 #include <GLFW/glfw3.h>
 #include <chrono>
@@ -18,32 +18,36 @@
 
 using namespace glm;
 using namespace std;
-using namespace nodes;
+using namespace scene;
 using namespace utils;
 using namespace physics;
 using namespace rendering;
 using namespace std::chrono;
 
-engine_runtime::engine_runtime(game_window& window) 
-    : _root_node(new scene_node(scene_node::node_type::ROOT)), _window(window), _main_camera(nullptr) {
+/* Tie singletons with the app */
+events g_events = events();
 
-    _events = make_unique<events>();
+
+engine_runtime::engine_runtime(game_window& window) 
+    : _root_node(new scene_node("GLOBAL_ROOT", scene_node::node_type::ROOT)), _window(window) {
+
+    _instance = this;
+
+
+
     _renderer = make_unique<renderer>();
     _physics = make_unique<physics_engine>();
 
-    _events->apply_callbacks(window);
-    _instance = this;
+    g_events.apply_callbacks(window);
 
     glfwSetWindowCloseCallback(window.props().glfw_handle, [](GLFWwindow*) { engine_runtime::_instance->_window.close(); });
-    glViewport(0, 0, window.props().current_mode.w, window.props().current_mode.h);
+    glViewport(0, 0, window.props().current_mode.size().x, window.props().current_mode.size().y);
 };
 
 engine_runtime::~engine_runtime() {
 
-    /* Invalidate all cached objects so they will delete themselves */
-    assets::asset::invalidate();
-
-    _recursive_scene_delete(_root_node);
+    /* Delete the scene */
+    delete _root_node;
 }
     
 engine_runtime* engine_runtime::instance() {
@@ -51,7 +55,7 @@ engine_runtime* engine_runtime::instance() {
 }
 
 void engine_runtime::start() {           
-        
+
     /* Setup timekeeping */
     system_clock::time_point tp_prev = system_clock::now(), 
                              tp_now;
@@ -59,10 +63,18 @@ void engine_runtime::start() {
     float physics_delta = 0.0f;
     float physics_interval = project_settings::physics_interval();
 
+    /* Load the initial scene */
+    auto initial_scene = assets::loader::load<assets::scene_template>(project_settings::default_scene_path());
+    root_node(initial_scene->instantiate());
+
+    /* Check if renderer has a valid camera */
+    if (!_renderer->has_active_camera())
+        logger::error << "No main camera found in the scene! For rendering to work, you'll need to set one up manually" << std::endl;
+
     /* Mainloop */
     while (!_window.props().is_closing) {
         
-        _events->process_frame();
+        g_events.process_frame();
 
         /* Calculate time elapsed since last frame */
         tp_now = system_clock::now();
@@ -79,39 +91,25 @@ void engine_runtime::start() {
 
         /* Logic */
         const mat4x4 ident = identity<mat4x4>();
-        _recursive_scene_update(elapsed, _root_node, ident);
+        
+        if (_root_node != nullptr) {
+            _root_node->update_node(elapsed);
+            _root_node->prepare_draw(ident);
+        }
 
         /* Render & postprocess */
-        if (_main_camera)
-            _renderer->draw_scene(*_main_camera);
+        _renderer->draw_scene();
 
         /* Display new frame */
         glfwSwapBuffers(_window.props().glfw_handle);
-
-        /* Debug */
-        if (_events->is_key_pressed(key_code::ESC))
-            _window.close();
-        
-        if (_events->is_key_held(key_code::D)) {
-            vec3 pos = _main_camera->position();
-            pos.x += 10 * elapsed;
-            _main_camera->position(pos);
-        }
-
-
-        if (_events->is_key_held(key_code::A)) {
-            vec3 pos = _main_camera->position();
-            pos.x -= 10 * elapsed;
-            _main_camera->position(pos);
-        }
     }
 }
 
 scene_node* engine_runtime::root_node(scene_node* root) {
 
     /* Delete children of root node */
-    for (auto& child : _root_node->children())
-        _recursive_scene_delete(child);
+    for (auto& [name, child] : _root_node->children())
+        delete child;
 
     /* Add node to scene - recursively adds children to scene */
     _root_node->add_child(root);       
@@ -121,39 +119,4 @@ scene_node* engine_runtime::root_node(scene_node* root) {
 
     /* Return */
     return _root_node;
-}
-
-void engine_runtime::_recursive_scene_update(const float elapsed, scene_node* node, const mat4x4& parent_transform) {
-
-    if (_root_node == nullptr)
-        return;
-
-    if (!node->enabled())
-        return; /* Do not update self and children*/
-    
-    /* Lerp on positions */
-    node->node_update(elapsed);
-
-    /* Frustrum culling on the object - if renderable */
-    if (node->has_component<mesh_instance>()) {
-        
-        auto mesh = node->component<mesh_instance>();
-        mesh->request_draw(node->model_mat() * parent_transform);
-    }
-        
-    /* Append children to queue*/
-    for (auto child : node->children()) 
-        _recursive_scene_update(elapsed, child, node->model_mat() * parent_transform);
-}
-
-void engine_runtime::_recursive_scene_delete(scene_node* node) {
-
-    if (node == nullptr)
-        return;
-
-    /* Do a simple postorder deleting nodes */
-    for (auto child : node->children())
-        _recursive_scene_delete(child);
-
-    delete node;
 }

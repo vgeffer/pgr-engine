@@ -10,6 +10,7 @@
 
 #include "shader.hpp"
 #include "../utils/buffer.hpp"
+#include "../utils/logger.hpp"
 
 using namespace std;
 using namespace utils;
@@ -25,9 +26,10 @@ shader_stage::shader_stage(string path)
     : _type_bitmask(0) {
 
     GLint result = GL_FALSE;
-    
-    /* TODO: Add source resolving for #pragma use*/
     GLenum _type;
+    
+    /// @todo [Long-Term]: Shader system overhaul
+    
     /* Get type from filename */
     string ext = filesystem::path(path).extension();
     if (auto it = _ext_type_map.find(ext); it != _ext_type_map.cend())
@@ -78,12 +80,12 @@ shader_stage::shader_stage(string path)
         utils::buffer<GLchar> error_buffer = utils::buffer<GLchar>(error_len);
         glGetShaderInfoLog(shader, error_len, &error_len, error_buffer);
 
-        /* TODO: Move to internal logging (Once ready) */
-        std::cerr << "In file " << path << ":\n";
-        std::cerr << "  " << error_buffer << std::endl;
+        /// @todo [Mid-Term]: Move to internal logging (Once ready)
+        logger::error << "In file " << path << ":\n";
+        logger::error << "  " << error_buffer << std::endl;
 
         /* Output source code of the file*/
-        std::cerr << "\nSource: \n" << src_buffer.c_str() << std::endl;
+        logger::info << " -> Source: \n" << src_buffer.c_str() << std::endl;
 
         glDeleteShader(shader);
         throw runtime_error("Shader compilation error"); 
@@ -108,14 +110,13 @@ shader_stage::shader_stage(string path)
         utils::buffer<GLchar> error_buffer = utils::buffer<GLchar>(error_len);
         glGetShaderInfoLog(shader, error_len, &error_len, error_buffer);
 
-        /* TODO: Move to internal logging (Once ready) */
-        std::cerr << "In file " << path << ":\n";
-        std::cerr << "  " << error_buffer << std::endl;
+        logger::error << "In file " << path << ":\n";
+        logger::error << "  " << error_buffer << std::endl;
         glDeleteShader(shader);
         throw runtime_error("Shader linking error"); 
     }   
     
-    /* Get attribs - TODO: compact into loop */
+    /// @todo [Mid-Term]: Compact attr/uniform loading into loop
     GLint attrib_count = 0,
           uniform_count = 0,
           uniform_block_count = 0;
@@ -123,19 +124,12 @@ shader_stage::shader_stage(string path)
     glGetProgramiv(_program, GL_ACTIVE_UNIFORMS, &uniform_count);
     glGetProgramiv(_program, GL_ACTIVE_UNIFORM_BLOCKS, &uniform_block_count);
 
-    GLint longest_attr, longest_uniform, longest_uniform_block;
-
-    /* Buffer to hold attribute names from OpenGL */
+    GLint longest_attr, longest_uniform;
     glGetProgramiv(_program, GL_ACTIVE_ATTRIBUTE_MAX_LENGTH, &longest_attr);
-    buffer<char> attr_name = buffer<char>(longest_attr);
-
-    /* Buffer to hold uniform names from OpenGL */
     glGetProgramiv(_program,  GL_ACTIVE_UNIFORM_MAX_LENGTH, &longest_uniform);
-    buffer<char> uniform_name = buffer<char>(longest_uniform);
-
-    /* Buffer to hold uniform_block names from OpenGL */
-    glGetProgramiv(_program,  GL_ACTIVE_UNIFORM_MAX_LENGTH, &longest_uniform_block);
-    buffer<char> uniform_block_name = buffer<char>(longest_uniform_block);
+    
+    /* Buffer to hold names from OpenGL objects*/
+    buffer<char> object_name = buffer<char>(max(longest_attr, longest_uniform));
 
     /* Parse out attribs */
     for (GLuint i = 0; i < static_cast<GLuint>(attrib_count); i++)
@@ -144,55 +138,32 @@ shader_stage::shader_stage(string path)
         GLenum attr_type;
 
         /* Get attrib name */
-        glGetActiveAttrib(_program, i, longest_attr, NULL, &attr_size, &attr_type, attr_name);
+        glGetActiveAttrib(_program, i, longest_attr, NULL, &attr_size, &attr_type, object_name);
 
         /* Reslove location */
-        GLint location = glGetAttribLocation(_program, attr_name);
+        GLint location = glGetAttribLocation(_program, object_name);
         
         /* Skip invalid ones */
         if (location < 0)
             continue;
         
-        std::cout << path << " - " << attr_name << ": "  << location << std::endl;
-
-        /* Push to attr map - TODO: maybe save type aswell */
-        _used_attrib_locations[string(attr_name)] = location;
+        _used_attrib_locations[string(object_name)] = location;
     }
 
     /* Parse out uniforms */
     for (GLuint i = 0; i < static_cast<GLuint>(uniform_count); i++)
     {
         /* Get uniform name */
-        glGetActiveUniformName(_program, i, longest_uniform, NULL, uniform_name);
+        glGetActiveUniformName(_program, i, longest_uniform, NULL, object_name);
 
         /* Reslove location */
-        GLint location = glGetUniformLocation(_program, uniform_name);
+        GLint location = glGetUniformLocation(_program, object_name);
 
         /* Skip invalid ones */
         if (location < 0) continue;
-
-        std::cout << path << " - " << uniform_name << ": "  << location << std::endl;
-        /* Push to uniform map - TODO: maybe save type aswell */
-        _used_uniform_locations[string(uniform_name)] = location;
+        _used_uniform_locations[string(object_name)] = location;
     }
 
-    /* Parse out uniform blocks */
-    for (GLuint i = 0; i < static_cast<GLuint>(uniform_block_count); i++)
-    {
-        /* Get uniform name */
-        glGetActiveUniformBlockName(_program, i, longest_uniform, NULL, uniform_name);
-
-        /* Reslove location */
-        GLint binding = glGetUniformBlockIndex(_program, uniform_name);
-
-        /* Skip invalid ones */
-        if (binding < 0)
-            continue;
-
-        std::cout << path << " - " << uniform_name << ": "  << binding << std::endl;
-        /* Push to uniform map - TODO: maybe save type aswell */
-        _used_uniform_block_bindings[string(uniform_name)] = binding;
-    }
     /* Clean up */
     glDetachShader(_program, shader);
     glDeleteShader(shader);
@@ -214,13 +185,6 @@ GLint shader_stage::attribute_location(string name) const {
 GLint shader_stage::uniform_location(string name) const {
 
     if (auto iter = _used_uniform_locations.find(name); iter != _used_uniform_locations.cend())
-        return iter->second;
-    return -1;
-}
-
-GLint shader_stage::uniform_block_binding(string name) const {
-
-    if (auto iter = _used_uniform_block_bindings.find(name); iter != _used_uniform_block_bindings.cend())
         return iter->second;
     return -1;
 }

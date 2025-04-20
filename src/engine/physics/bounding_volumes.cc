@@ -1,15 +1,22 @@
 #include "bounding_volumes.hpp"
+#include <glm/ext/quaternion_geometric.hpp>
 
 using namespace glm;
 using namespace physics;
 using namespace physics::bounding_volumes;
 
 /* Since collisions are symetric, here are some helpers for pairs */
-static inline bool _sphere_sphere_intersect(sphere& a, sphere& b) {
-    return distance(a.center(), b.center()) < a.radius() + b.radius();
+#define SQUARE(a) (a) * (a)
+
+static inline bool _static_sphere_sphere_intersect(sphere& a, sphere& b) {
+    return dot(a.center() - b.center(), a.center() - b.center()) < SQUARE(a.radius() + b.radius());
 }
 
-static inline bool _sphere_obb_intersect(sphere& a, obb& b) {
+static inline bool _dynamic_sphere_sphere_intersect() {
+    
+}
+
+static inline bool _sphere_kdop_intersect(sphere& a, kdop& b) {
     
     #define square(x) (x) * (x)
 

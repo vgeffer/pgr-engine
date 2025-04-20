@@ -185,13 +185,13 @@ namespace utils {
                     return *this;
                 }
 
-                _T& operator*() { 
+                _T& operator*() const { 
 
                     if (!valid()) throw std::runtime_error("Trying to dereference an invalid pointer");
                     return *_data; 
                 }
     
-                _T* operator->() { 
+                _T* operator->() const { 
                 
                     if (!valid()) throw std::runtime_error("Trying to dereference an invalid pointer");
                     return _data; 

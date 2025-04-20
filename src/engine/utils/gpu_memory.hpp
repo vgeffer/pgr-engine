@@ -34,14 +34,14 @@ namespace utils {
 
             void free_all_and_resize(size_t new_size);
 
-            inline size_t buffer_size() const { return _buffer_size; }
-            inline GLuint buffer() const { return  _buffer; }
+            inline size_t buffer_size() const { return m_buffer_size; }
+            inline GLuint buffer() const { return  m_buffer; }
 
         private:
-            size_t _buffer_size;
-            GLbitfield _buffer_hints;
-            std::forward_list<_alloc_chunk> _chunks;
+            size_t m_buffer_size;
+            GLbitfield m_buffer_hints;
+            std::forward_list<_alloc_chunk> m_chunks;
 
-            GLuint _buffer;
+            GLuint m_buffer;
     };
 }

@@ -26,11 +26,10 @@ namespace rendering {
                 glm::vec3 position;
                 glm::vec3 direction;
             
-                float constant_attenuation;  /* POINT and SPOT*/
-                float linear_attenuation;    /* POINT and SPOT*/
-                float quadratic_attenuation; /* POINT and SPOT*/
-                float angle;                 /* SPOT only */
-
+                float constant;  /* POINT and SPOT*/
+                float linear;    /* POINT and SPOT*/
+                float quadratic; /* POINT and SPOT*/
+                float angle;     /* SPOT only */
             };
 
         public:
@@ -48,7 +47,7 @@ namespace rendering {
 
         protected:
             explicit light(scene::scene_node* parent, light_type type, glm::vec3 ambient, glm::vec3 diffuse, 
-                           glm::vec3 specular, float c_att, float l_att, float q_att, float angle);
+                           glm::vec3 specular, float range, float angle);
 
             light_data_t m_data;
     
@@ -72,11 +71,11 @@ namespace rendering {
                 point_light(scene::scene_node* parent, const utils::resource& res);
 
                 std::tuple<float, float, float> light_attenuation() const { 
-                    return std::make_tuple(m_data.constant_attenuation, m_data.linear_attenuation, m_data.quadratic_attenuation); 
+                    return std::make_tuple(m_data.constant, m_data.linear, m_data.quadratic); 
                 }
 
                 std::tuple<float, float, float> light_attenuation(float c, float l, float q) {
-                    return std::make_tuple(m_data.constant_attenuation = c, m_data.linear_attenuation = l, m_data.quadratic_attenuation = q); 
+                    return std::make_tuple(m_data.constant = c, m_data.linear = l, m_data.quadratic = q); 
                 }
         };
 
@@ -88,11 +87,11 @@ namespace rendering {
 
 
                 std::tuple<float, float, float> light_attenuation() const { 
-                    return std::make_tuple(m_data.constant_attenuation, m_data.linear_attenuation, m_data.quadratic_attenuation); 
+                    return std::make_tuple(m_data.constant, m_data.linear, m_data.quadratic); 
                 }
 
                 std::tuple<float, float, float> light_attenuation(float c, float l, float q) {
-                    return std::make_tuple(m_data.constant_attenuation = c, m_data.linear_attenuation = l, m_data.quadratic_attenuation = q); 
+                    return std::make_tuple(m_data.constant = c, m_data.linear = l, m_data.quadratic = q); 
                 }
 
                 float angle() const { return m_data.angle; }

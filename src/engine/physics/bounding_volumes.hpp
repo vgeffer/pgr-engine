@@ -6,13 +6,21 @@
 namespace physics {
 
     enum bounding_volume_type {
-        SPHERE, OBB, SURFACE
+        SPHERE, KDOP, SURFACE
     };
 
-    class bounding_volume {
+    typedef struct {
+        bool result;
+        glm::vec3 intersection_point;
+        float intersection_time;
+    } collision_result_t;
+
+    class bounding_volume : scene::node_component {
 
         public:
-            virtual bool intersects(bounding_volume& other);
+            virtual collision_result_t static_collision(bounding_volume& other);
+            virtual collision_result_t dynamic_collision(bounding_volume& other);
+
             virtual void transform(glm::mat4x4& mat);
 
             inline bounding_volume_type type() const { return _type; }
@@ -30,7 +38,9 @@ namespace physics {
             public:
                 sphere(glm::vec3& center, float radius);
 
-                bool intersects(bounding_volume& other) override;
+                virtual collision_result_t static_collision(bounding_volume& other) override;
+                virtual collision_result_t dynamic_collision(bounding_volume& other) override;
+
                 void transform(glm::mat4x4& mat) override;
 
                 inline float radius() const { return _radius; };
@@ -41,16 +51,20 @@ namespace physics {
                 glm::vec3 _center;
         };
 
-        class obb : public bounding_volume {
+        class kdop : public bounding_volume {
 
-            bool intersects(bounding_volume& other) override;
+            virtual collision_result_t static_collision(bounding_volume& other) override;
+            virtual collision_result_t dynamic_collision(bounding_volume& other) override;
+
             void transform(glm::mat4x4& mat) override;
 
         };
 
         class surface : public bounding_volume {
 
-            bool intersects(bounding_volume& other) override;
+            virtual collision_result_t static_collision(bounding_volume& other) override;
+            virtual collision_result_t dynamic_collision(bounding_volume& other) override;
+
             void transform(glm::mat4x4& mat) override;
 
             private:

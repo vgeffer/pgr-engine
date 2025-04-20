@@ -1,11 +1,17 @@
 #include "renderer.hpp"
 #include "../utils/project_settings.hpp"
+#include "../assets/loader.hpp"
 #include "../runtime.hpp"
+#include "camera.hpp"
 #include "mesh.hpp"
-#include <GL/gl.h>
+#include <cstddef>
 #include <glm/ext/matrix_float4x4.hpp>
+#include <glm/ext/matrix_transform.hpp>
 #include <glm/ext/scalar_constants.hpp>
+#include <glm/ext/vector_float3.hpp>
+#include <glm/ext/vector_int4.hpp>
 #include <glm/fwd.hpp>
+#include <glm/matrix.hpp>
 #include <memory>
 #include <stdexcept>
 #include <utility>
@@ -13,37 +19,38 @@
 #include <glm/gtc/type_ptr.hpp>
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtx/norm.hpp>
+#include <glm/gtx/string_cast.hpp>
 
 using namespace std;
 using namespace glm;
-using namespace nodes;
 using namespace utils;
 using namespace assets;
 using namespace rendering;
 
-/* Constants */
-const GLint CAMERA_UBO_BINDING = 0;
-const GLint MATERIAL_UBO_BINDING = 1;
-
-renderer::renderer() {
+/* PP update 1: Build depth texture only once */
+renderer::renderer() 
+    : m_vertex_buffer(gpu_allocator(project_settings::gpu_geometry_buffer_alloc_size())), 
+      m_element_buffer(gpu_allocator(project_settings::gpu_geometry_buffer_alloc_size())),
+      m_material_buffer(gpu_allocator(project_settings::gpu_material_buffer_alloc_size())),
+      m_texture_buffer(gpu_allocator(project_settings::gpu_textures_buffer_alloc_size())) {
 
     if (_instance != nullptr)
         throw logic_error("Renderer already initialised");
     
     for (GLenum capability : project_settings::gl_global_capabilities())
         glEnable(capability);
-    
+
     /* Setup backface culling - this is constant */
+    glEnable(GL_DEPTH_TEST);
+    glEnable(GL_CULL_FACE);
+    glDepthFunc(GL_LESS);
     glCullFace(GL_BACK);
     glFrontFace(GL_CCW);
     glDepthFunc(GL_LESS);
-    glClearColor(0.3f, 0.3f, 0.3f, 1.0f);
+    glClearColor(0,0,0, 1.0f);
 
     _instance = this;
-    glGenProgramPipelines(1, &_gl_pipeline); /* TODO: mayybe multiple pipelines? */
-
-    /* Get texturing info */
-    glGetIntegerv(GL_MAX_TEXTURE_IMAGE_UNITS, &_max_textures);
+    glGenProgramPipelines(1, &m_pipeline);
 
     /* Generate quad for postprocess */
     const vector<vec2> pp_quad_verts = {
@@ -54,44 +61,69 @@ renderer::renderer() {
     };
 
     /* Load shader */
-    _pp_vertex_stage = asset::load<shader_stage>("shaders/postprocess.vert", asset::caching_policy::KEEPALIVE);
+    m_postprocess_vertex_shader = loader::load<shader_stage>("shaders/postprocess.vert", loader::caching_policy::KEEPALIVE);
 
-    /* Create objects */
-    glGenVertexArrays(1, &_pp_quad_vao);
-    glGenBuffers(1, &_pp_quad_vbo);
-
-    /* Assign to OGL objects */
-    glBindVertexArray(_pp_quad_vao);
-       
-    /* Vertices */
-    glBindBuffer(GL_ARRAY_BUFFER, _pp_quad_vbo);
-    glBufferData(
-        GL_ARRAY_BUFFER, 
+    /* Create pp_quad */
+    glCreateVertexArrays(1, &m_pp_quad_vao);
+    glCreateBuffers(1, &m_pp_quad_vbo);
+    glNamedBufferData(
+        m_pp_quad_vbo, 
         pp_quad_verts.size() * sizeof(pp_quad_verts[0]), 
         pp_quad_verts.data(), 
         GL_STATIC_DRAW
     );
 
+    /* Create model vao with ebo */
+    glCreateVertexArrays(1, &m_models_vao);
 
-    glVertexAttribPointer(_pp_vertex_stage->attribute_location("vertex"), 2, GL_FLOAT, false, 0, 0);
-    glEnableVertexAttribArray(_pp_vertex_stage->attribute_location("vertex"));
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);   
+    /* Bind EBO and VBO */
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, VERTEX_SSBO, m_vertex_buffer.buffer());
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, POSTPROCESS_VERTEX_SSBO, m_pp_quad_vbo);
+    glVertexArrayElementBuffer(m_models_vao, m_element_buffer.buffer());
+
+    /* Bind Texture and Model budder */
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, MATERIAL_SSBO, m_material_buffer.buffer());
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, TEXTURE_SSBO, m_texture_buffer.buffer());
+
+    /* Create Draw command queue */
+    glCreateBuffers(1, &m_draw_cmd_queue);
+
+    /* Create dynamic object data storage */
+    glCreateBuffers(1, &m_object_storage);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, OBJECT_SSBO, m_object_storage);
+
+    /* Create light buffer */
+    glCreateBuffers(1, &m_light_storage);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, LIGHTS_SSBO, m_light_storage);
+
+    /* Create global depth RBO for postprocessing */
+    glCreateRenderbuffers(1, &m_pass_depth_attachment);
+    //win_props_t props = engine_runtime::instance()->window().props();
+//
+    //glNamedRenderbufferStorage(
+    //    m_pass_depth_attachment, GL_DEPTH24_STENCIL8,
+    //    props.current_mode.w, props.current_mode.h
+    //);
+
+    /* Create global depth texture */
 }
 
 renderer::~renderer() {
 
-    for (auto& stage : _attached_shader_stages)
-        glUseProgramStages(_gl_pipeline, stage->type_bitmask(), 0);
+    for (auto& [bitmask, stage] : m_attached_shader_stages)
+        glUseProgramStages(m_pipeline, bitmask, 0);
 
-    glDeleteProgramPipelines(1, &_gl_pipeline);
+    glDeleteProgramPipelines(1, &m_pipeline);
 
     /* Delete postprocess passes */
-    for (size_t i = 0; i < _pp_passes.size(); i++)
+    for (size_t i = 0; i < m_passes.size(); i++)
         remove_postprocess_pass(i);
 
-    glDeleteBuffers(1, &_pp_quad_vbo);
-    glDeleteVertexArrays(1, &_pp_quad_vao);
+    glDeleteBuffers(1, &m_pp_quad_vbo);
+    glDeleteVertexArrays(1, &m_pp_quad_vbo);
+
+    /* Delete instance data */
+    _instance = nullptr; 
 }
 
 size_t renderer::add_postprocess_pass(shader_stage* shader, bool append) {
@@ -99,275 +131,175 @@ size_t renderer::add_postprocess_pass(shader_stage* shader, bool append) {
     if (shader->type_bitmask() != GL_FRAGMENT_SHADER_BIT)
         throw logic_error("Provided shader is not a fragment shader!");
 
-    win_props_t props = engine_runtime::instance()->window().props();
+    const game_window::window_props_t& props = engine_runtime::instance()->window().props();
+    GLuint pass_fbo, pass_color_texture;
 
-    postprocess_pass_t pp = {};
-    glGenFramebuffers(1, &pp.pp_fbo);
+    glCreateFramebuffers(1, &pass_fbo);
+    glCreateTextures(GL_TEXTURE_2D, 1, &pass_color_texture);
 
-    glBindFramebuffer(GL_FRAMEBUFFER, pp.pp_fbo);
-    if (shader->uniform_location("screen_texture") >= 0) {
+    glTextureStorage2D(
+        pass_color_texture, 1, GL_RGB8, 
+        props.current_mode.size().x, props.current_mode.size().y
+    );
 
-        /* Screen texture is used, create it as texture*/
-        pp.pp_use_color_tex = true;
-        glGenTextures(1, &pp.pp_color_buffer);
-        glBindTexture(GL_TEXTURE_2D, pp.pp_color_buffer);
-
-        glTexImage2D(
-            GL_TEXTURE_2D, 
-            0, GL_RGB, 
-            props.current_mode.w, 
-            props.current_mode.h, 
-            0, GL_RGB, 
-            GL_UNSIGNED_BYTE, NULL
-        );
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, project_settings::tex_min_filter());
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, project_settings::tex_mag_filter());
-        glBindTexture(GL_TEXTURE_2D, 0);
-
-        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, pp.pp_color_buffer, 0);
-    }
-    else {
-
-        /* Screen texture is not used, create it as RBO */
-        pp.pp_use_color_tex = false;
-        glGenRenderbuffers(1, &pp.pp_color_buffer);
-        glBindRenderbuffer(GL_RENDERBUFFER, pp.pp_color_buffer);
-        glRenderbufferStorage(
-            GL_RENDERBUFFER, 
-            GL_RGB,
-            props.current_mode.w, 
-            props.current_mode.h
-        );
-
-        glBindRenderbuffer(GL_RENDERBUFFER, 0);
-        glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, pp.pp_color_buffer);
-    }
-
-    if (shader->uniform_location("screen_texture") >= 0) {
-
-        /* Depth texture is used, create it as texture*/
-        pp.pp_use_depth_tex = true;
-        glGenTextures(1, &pp.pp_depth_buffer);
-        glBindTexture(GL_TEXTURE_2D, pp.pp_depth_buffer);
-
-        glTexImage2D(
-            GL_TEXTURE_2D, 
-            0, GL_DEPTH24_STENCIL8, 
-            props.current_mode.w, 
-            props.current_mode.h, 
-            0, GL_DEPTH_STENCIL, 
-            GL_UNSIGNED_INT_24_8, NULL
-        );
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, project_settings::tex_min_filter());
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, project_settings::tex_mag_filter());
-        glBindTexture(GL_TEXTURE_2D, 0);
-
-        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_TEXTURE_2D, pp.pp_depth_buffer, 0);
-    }
-    else {
-
-        /* Depth texture is not used, create it as RBO */
-        pp.pp_use_depth_tex = false;
-        glGenRenderbuffers(1, &pp.pp_depth_buffer);
-        glBindRenderbuffer(GL_RENDERBUFFER, pp.pp_depth_buffer);
-        glRenderbufferStorage(
-            GL_RENDERBUFFER, 
-            GL_DEPTH24_STENCIL8,
-            props.current_mode.w, 
-            props.current_mode.h
-        );
-
-        glBindRenderbuffer(GL_RENDERBUFFER, 0);
-        glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, pp.pp_depth_buffer);
-    }
+    glTextureParameteri(pass_color_texture, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTextureParameteri(pass_color_texture, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTextureParameteri(pass_color_texture, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
+    glTextureParameteri(pass_color_texture, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
+    
+    /* Attach */
+    glNamedFramebufferTexture(pass_fbo, GL_COLOR_ATTACHMENT0, pass_color_texture, 0);
+    glNamedFramebufferRenderbuffer(pass_fbo, GL_DEPTH_ATTACHMENT,  GL_RENDERBUFFER, m_pass_depth_attachment);
 
     /* Check if framebuffer is complete */
-    if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+    if (glCheckNamedFramebufferStatus(pass_fbo, GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
         throw runtime_error("Framebuffer not complete yet!");
 
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    if (append)
+        m_passes.emplace(m_passes.end(), m_postprocess_pass{pass_fbo, pass_color_texture, true});
 
-    if (append) {
-        
-        _pp_passes.push_back(pp);
-        return _pp_passes.size() - 1;
-    }
-
-    _pp_passes.insert(_pp_passes.begin(), pp);
+    m_passes.emplace(m_passes.begin(), m_postprocess_pass{pass_fbo, pass_color_texture, true});
     return 0;
 }
 
 void renderer::remove_postprocess_pass(size_t index) {
 
-    if (index < 0 || index >= _pp_passes.size())
-        throw runtime_error("Index out of range!");
-
-    postprocess_pass_t pp = _pp_passes[index];
-    _pp_passes.erase(_pp_passes.begin() + index);
+    m_postprocess_pass& pass = m_passes.at(index);
     
-    /* Frame buffer */
-    glDeleteFramebuffers(1, &pp.pp_fbo);
-    
-    /* Color buffer */
-    if (pp.pp_use_color_tex) glDeleteTextures(1, &pp.pp_color_buffer);
-    else glDeleteRenderbuffers(1, &pp.pp_color_buffer);
+    glDeleteFramebuffers(1, &pass.m_fbo);
+    glDeleteTextures(1, &pass.m_color_texture);
 
-    /* Depth buffer */
-    if (pp.pp_use_depth_tex) glDeleteTextures(1, &pp.pp_depth_buffer);
-    else glDeleteRenderbuffers(1, &pp.pp_depth_buffer);
+    m_passes.erase(m_passes.begin() + index);
 }
 
-void renderer::insert_mesh(observer_ptr<mesh_instance>&& mesh) {
+void renderer::set_active_camera(const utils::observer_ptr<camera>& camera) {
 
-    _draw_list.emplace_back(mesh);
+    if (!camera.valid() || m_active_camera == camera)
+        return;
+
+    m_active_camera = camera;
+    glBindBufferBase(GL_UNIFORM_BUFFER, CAMERA_UBO, m_active_camera->camera_data());
+} 
+
+void renderer::request_draw(const observer_ptr<mesh_instance>& mesh, glm::mat4x4 transform) {
+
+    /* If mesh is invalid, there is no point in drawing it */
+    if (!mesh.valid())
+        return;
+
+
+
+
+
+
+
+
+
+    object_data data =  {
+        transform,
+        glm::transpose(glm::inverse(transform)),
+        glm::identity<mat3x3>(),
+        mesh->get_material().material_index()
+    };
+
+    /// @todo [Short-Term]: Object grouping. 
+    /// @todo [Very-Short-Term]: Also pass shading info
 }
 
 /* This... this is gonna be a big one */
-void renderer::draw_scene(camera& camera) {
+void renderer::draw_scene() {
 
-    /* Main camera && Postprocess is enabled */
-    if (!_pp_passes.empty())
-        glBindFramebuffer(GL_FRAMEBUFFER, _pp_passes[0].pp_fbo); /* Bind FBO */
-    
-    /* TODO: Render textures */
+    /// @todo [Long-Term]: Implement render textures & deferred shading
     
     /* Clear buffer */
     glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
 
+    /* No valid camera bound, end the draw function */
+    if (!m_active_camera.valid())
+        return;
+
     /* Update view matrix uniform */
-    glBindBuffer(GL_UNIFORM_BUFFER, camera.matrix_buffer());
-    glBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(mat4x4), value_ptr(camera.view()));
-    glBindBuffer(GL_UNIFORM_BUFFER, 0);
+    glNamedBufferSubData(
+        m_active_camera->camera_data(), 
+        sizeof(mat4x4), sizeof(mat4x4), 
+        glm::value_ptr(m_active_camera->view())
+    );
+
+    /* Create command queues */
+    std::vector<m_draw_command_elements> commands;
+    std::vector<m_object_data> object_data;
     
-    /* Bind camera's matrix to the correct UBO  - optimize binding */
-    glBindBufferBase(GL_UNIFORM_BUFFER, CAMERA_UBO_BINDING, camera.matrix_buffer());
+    commands.reserve(m_enqueued_draws.size());
+    object_data.reserve(m_enqueued_draws.size());
+    
+    for (auto [mesh, data] : m_enqueued_draws) {
 
+        /* Prepare transform and command buffers */
+        m_draw_command_elements command = {
+            mesh->element_count(),
+            1, /* No instancing RN */
+            mesh->first_index(),
+            static_cast<int>(mesh->first_vertex()),
+            0 /* No instancing RN */
+        };
 
-    auto draw_iter = _draw_list.begin();
-    GLuint currently_bound_vao = -1;
+        commands.push_back(command);
+        object_data.push_back(data);
+    }
+
+    
+    /* Update light data */
+    /// @todo [Long-Term]: Update lights only when dirty
+    glNamedBufferData(m_light_storage, m_lights.size() * sizeof(m_lights[0]), m_lights.data(), GL_DYNAMIC_DRAW);
+
+    glNamedBufferData(m_draw_cmd_queue, commands.size() * sizeof(commands[0]), commands.data(), GL_DYNAMIC_DRAW);
+    glNamedBufferData(m_object_storage, object_data.size() * sizeof(object_data[0]), object_data.data(), GL_DYNAMIC_DRAW);
+
+    /* Only TWO (engine) uniforms per shader! */
+    set_uniform("draw_id_offset", 0u);
+    set_uniform("light_count", static_cast<uint>(m_lights.size()));
+
+    glBindProgramPipeline(m_pipeline);
+    glBindVertexArray(m_models_vao);
+    glBindBuffer(GL_DRAW_INDIRECT_BUFFER, m_draw_cmd_queue);
+
 
     //===============================
     // PASS 1 - Opaque objects
     //===============================
-    glBindProgramPipeline(_gl_pipeline);
-    for (; draw_iter != _draw_list.end(); draw_iter++) {
-
-        /* Underlying object was already deleted, delete it */
-        auto to_draw = *draw_iter;
-
-        if (!to_draw.valid()) {
-            draw_iter = _draw_list.erase(draw_iter);
-            
-            /* If the item was last, end the list */
-            if (draw_iter == _draw_list.end())
-                break;
-        }
-
-        /* Reached transparent objects, end the pass */
-        if (to_draw->mat->transparent())
-            break; 
-
-        /* Check if model is supposed to be drawn */
-        if (!to_draw->draw_enqueued())
-            continue; 
-
-        /* Bind up matrices & materials */
-        _set_uniform("mat_model", to_draw->model_mat());
-        to_draw->mat->use();
-
-        /* Draw! */
-        const GLuint vao = to_draw->drawable->vao();
-        if (vao != currently_bound_vao)
-            glBindVertexArray((currently_bound_vao = vao));
-
-        const GLuint mode = to_draw->drawable->mode();    
-        if (mode != GL_TRIANGLE_STRIP && mode != GL_TRIANGLE_FAN)
-            glDrawElements(mode, to_draw->drawable->element_count(), GL_UNSIGNED_INT, reinterpret_cast<void*>(0));
-        else glDrawArrays(mode, 0, to_draw->drawable->element_count());
-    } 
+    glMultiDrawElementsIndirect(GL_TRIANGLES, GL_UNSIGNED_INT, NULL, commands.size(), 0);
 
     //===============================
     // PASS 2 - Transparent objects
     //===============================
-    if (draw_iter != _draw_list.cend()) /* OIT - No sorting neceseary, only check if an oit step needs to be performed */
-        ;
+
+
+    //glMultiDrawElementsIndirect(GL_TRIANGLES, GL_UNSIGNED_INT, 0, 1, 0);
+
+
+    glBindBuffer(GL_DRAW_INDIRECT_BUFFER, 0);
+    glBindVertexArray(0);
+    glBindProgramPipeline(0);
+
     
-    for (; draw_iter != _draw_list.cend(); draw_iter++) {
-    
-        auto to_draw = *draw_iter;
-        
-        /* Underlying object was already deleted, delete it */
-        if (!to_draw.valid()) {
-            draw_iter = _draw_list.erase(draw_iter);
-            
-            /* If the item was last, end the list */
-            if (draw_iter == _draw_list.end())
-                break;
-        }
-
-        if (!to_draw->draw_enqueued())
-            continue;
-
-        /* Binding up */
-        _set_uniform("mat_model", to_draw->model_mat());
-
-        /* Draw! */
-        const GLuint vao = to_draw->drawable->vao();
-
-        if (vao != currently_bound_vao)
-            glBindVertexArray((currently_bound_vao = vao));
-
-        const GLuint mode = to_draw->drawable->mode();    
-        if (mode != GL_TRIANGLE_STRIP || mode != GL_TRIANGLE_FAN)
-            glDrawElements(mode, to_draw->drawable->element_count(), GL_UNSIGNED_INT, static_cast<void*>(0));
-        else glDrawArrays(mode, 0, to_draw->drawable->element_count());
-    }
-
     //===============================
     // PASS 3 - Post-processing 
     //===============================
-    if (!_pp_passes.empty()) {
 
-        size_t current_pass_idx = 0,
-            next_pass_idx = 1;
-        
-        _attach_stage(_pp_vertex_stage);
 
-        /* Bind Postprocess target -> quad*/
-        glBindVertexArray(_pp_quad_vao);
-
-        while (true) {
-
-            if (_pp_passes.size() > next_pass_idx)
-                glBindFramebuffer(GL_FRAMEBUFFER, _pp_passes[next_pass_idx].pp_fbo);
-            else
-                glBindFramebuffer(GL_FRAMEBUFFER, 0);
-
-            _attach_stage(_pp_passes[current_pass_idx].pp_shader);
-            if (_pp_passes[current_pass_idx].pp_use_color_tex) _set_texture("screen_texture", _pp_passes[current_pass_idx].pp_color_buffer);
-            if (_pp_passes[current_pass_idx].pp_use_depth_tex) _set_texture("depth_texture", _pp_passes[current_pass_idx].pp_depth_buffer);
-
-            /* Draw */
-            glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
-
-            /* Last pass was rendered, end */
-            if (_pp_passes.size() >= next_pass_idx)
-                break;
-            
-            current_pass_idx = next_pass_idx;
-            next_pass_idx++;
-        }
-
-        /* Unbind quad */
-        glBindVertexArray(0);
-    }
+    size_t last_frame_lights = m_lights.size();
+    m_lights.clear();
+    m_lights.reserve(last_frame_lights);
+   
+    m_enqueued_draws.clear();
+    m_enqueued_draws.reserve(commands.size());
 }
 
 vector<pair<GLuint, GLint>> renderer::attribute_location(string name) const {
 
     vector<pair<GLuint, GLint>> found_locations;
 
-    for (auto& stage : _attached_shader_stages) {
+    for (auto [type, stage] : m_attached_shader_stages) {
 
         GLint location;
         if ((location = stage->attribute_location(name)) >= 0)
@@ -381,7 +313,7 @@ vector<pair<GLuint, GLint>> renderer::uniform_location(string name) const {
 
     vector<pair<GLuint, GLint>> found_locations;
 
-    for (auto& stage : _attached_shader_stages) {
+    for (auto [type, stage] : m_attached_shader_stages) {
 
         GLint location;
         if ((location = stage->uniform_location(name)) >= 0)
@@ -391,78 +323,88 @@ vector<pair<GLuint, GLint>> renderer::uniform_location(string name) const {
     return found_locations;
 }
 
+template <typename T> 
+void renderer::set_uniform(std::string uniform_name, const T& val) {
+
+    auto found_locations = uniform_location(uniform_name);
+    if (found_locations.size() <= 0)
+        return;
+
+    for (auto [program, location] : found_locations)
+        _set_uniform_value<T>(program, location, val);
+}
+
 void renderer::_attach_stage(shared_ptr<shader_stage>& stage) {
 
-    for (size_t i = 0; i < _attached_shader_stages.size(); i++) {
+    /* Grab iterator */
+    auto iter = m_attached_shader_stages.find(stage->type_bitmask());
 
-        /* Stage exists, replace */
-        if (_attached_shader_stages[i]->type_bitmask() == stage->type_bitmask()) {
-            _attached_shader_stages[i] = stage;
-            glUseProgramStages(_gl_pipeline, stage->type_bitmask(), *stage);
-            return;
-        }
+    if (iter == m_attached_shader_stages.end()) {
+
+        m_attached_shader_stages.emplace(stage->type_bitmask(), stage);
+        glUseProgramStages(m_pipeline, stage->type_bitmask(), *stage);
+        return;
     }
 
-    /* Stage does not exist, add */
-    _attached_shader_stages.push_back(stage);
-    glUseProgramStages(_gl_pipeline, stage->type_bitmask(), *stage);
-}
-
-void _set_texture(std::string texture_name, std::shared_ptr<assets::texture> texture) {
-
-}
-
-void renderer::set_uniform(std::string uniform_name, const int& val) {
-
-    auto found_locations = uniform_location(uniform_name);
-    if (found_locations.size() <= 0)
+    /* Optimize shader changes */
+    if (m_attached_shader_stages[iter->first] == stage)
         return;
-
-    for (auto [program, location] : found_locations)
-        glProgramUniform1i(
-            program, location, 
-            val
-        );
+    
+    m_attached_shader_stages[iter->first] = stage;
+    glUseProgramStages(m_pipeline, stage->type_bitmask(), *stage);
 }
 
-template <float>
-void renderer::set_uniform(std::string uniform_name, const float& val) {
 
-    auto found_locations = uniform_location(uniform_name);
-    if (found_locations.size() <= 0)
-        return;
-
-    for (auto [program, location] : found_locations)
-        glProgramUniform1i(
-            program, location, 
-            val
-        );
+/* Uniform setters - there is a lot of them*/
+template <> void renderer::_set_uniform_value<int>(GLuint program, GLint location, const int& val) {
+    glProgramUniform1i(program, location, val);
 }
 
-void renderer::_set_uniform(std::string uniform_name, const glm::mat3x3& mat) {
-
-    auto found_locations = uniform_location(uniform_name);
-    if (found_locations.size() <= 0)
-        return;
-
-    for (auto [program, location] : found_locations)
-        glProgramUniformMatrix3fv(
-            program, location, 
-            1, GL_FALSE, 
-            glm::value_ptr(mat)
-        );
+template <> void renderer::_set_uniform_value<uint>(GLuint program, GLint location, const uint& val) {
+    glProgramUniform1ui(program, location, val);
 }
 
-void renderer::_set_uniform(std::string uniform_name, const glm::mat4x4& mat) {
+template <> void renderer::_set_uniform_value<float>(GLuint program, GLint location, const float& val) {
+    glProgramUniform1f(program, location, val);
+}
 
-    auto found_locations = uniform_location(uniform_name);
-    if (found_locations.size() <= 0)
-        return;
+template <> void renderer::_set_uniform_value<bool>(GLuint program, GLint location, const bool& val) {
+    glProgramUniform1i(program, location, val);
+}
 
-    for (auto [program, location] : found_locations)
-        glProgramUniformMatrix4fv(
-            program, location, 
-            1, GL_FALSE, 
-            glm::value_ptr(mat)
-        );
+template <> void renderer::_set_uniform_value<ivec2>(GLuint program, GLint location, const ivec2& val) { 
+    glProgramUniform2iv(program, location, 1, value_ptr(val)); 
+}
+
+template <> void renderer::_set_uniform_value<vec2>(GLuint program, GLint location, const vec2& val) {
+        glProgramUniform2fv(program, location, 1, value_ptr(val));
+}
+
+template <> void renderer::_set_uniform_value<mat2x2>(GLuint program, GLint location, const mat2x2& val) {
+    glProgramUniformMatrix2fv(program, location, 1, GL_FALSE, value_ptr(val));
+}
+
+template <> void renderer::_set_uniform_value<ivec3>(GLuint program, GLint location, const ivec3& val) {
+    glProgramUniform3iv(program, location, 1,  value_ptr(val));
+}
+
+template <> void renderer::_set_uniform_value<vec3>(GLuint program, GLint location, const vec3& val) {
+    glProgramUniform3fv(program, location, 1,  value_ptr(val));
+}
+
+template <> void renderer::_set_uniform_value<mat3x3>(GLuint program, GLint location, const mat3x3& val) {
+
+    glProgramUniformMatrix3fv(program, location, 1, GL_FALSE, value_ptr(val));
+}
+
+template <> void renderer::_set_uniform_value<ivec4>(GLuint program, GLint location, const ivec4& val) {
+    glProgramUniform2iv(program, location, 1, value_ptr(val));
+}
+
+template <> void renderer::_set_uniform_value<vec4>(GLuint program, GLint location, const vec4& val) {
+    glProgramUniform4fv(program, location, 1, value_ptr(val));
+}
+
+template <> void renderer::_set_uniform_value<mat4x4>(GLuint program, GLint location, const mat4x4& val) {
+    glProgramUniformMatrix4fv(program, location, 1, GL_FALSE, value_ptr(val));
 }

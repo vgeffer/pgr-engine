@@ -18,6 +18,7 @@ namespace rendering {
     class material {
 
         public:
+            material();
             material(const utils::resource& res);
             material(glm::vec3 a, glm::vec3 d, glm::vec3 s, float sh, float al);
             ~material();
@@ -37,15 +38,21 @@ namespace rendering {
                 float m_shininess;
                 float m_alpha;
 
-                std::array<std::shared_ptr<assets::texture>, 2> m_specular_textures;
-                std::array<std::shared_ptr<assets::texture>, 2> m_diffuse_textures;
-                std::array<std::shared_ptr<assets::texture>, 2> m_normal_maps;
-                std::array<std::shared_ptr<assets::texture>, 2> m_blend_maps;
-                
+                std::array<int, 2> diffuse_texture_ids;
+                std::array<int, 2> specular_texture_ids;
+                std::array<int, 2> normal_map_ids;
+                std::array<int, 2> blend_map_ids;
+
                 glm::ivec4 m_bound_textures_count;
             } m_data;
 
+            std::array<std::shared_ptr<assets::texture>, 2> m_specular_textures;
+            std::array<std::shared_ptr<assets::texture>, 2> m_diffuse_textures;
+            std::array<std::shared_ptr<assets::texture>, 2> m_normal_maps;
+            std::array<std::shared_ptr<assets::texture>, 2> m_blend_maps;
+
             std::unordered_map<GLbitfield, std::shared_ptr<assets::shader_stage>> m_shader_stages;
+            utils::gpu_allocator::handle m_buffer_handle;
             int m_material_index;
         };
 }
