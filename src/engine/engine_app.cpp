@@ -35,7 +35,6 @@ application::application(const std::string& project_conf) {
 application::exit_status application::run() {
 
     try {
-        
         video_mode mode = video_mode("video.json", DEFAULT_VIDMODE);
         g_window.create(utils::project_settings::project_name(), mode);
         

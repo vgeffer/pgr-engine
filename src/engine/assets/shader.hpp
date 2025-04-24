@@ -8,7 +8,6 @@
 #include "../../lib/glad/glad.h"
 #include "asset.hpp"
 #include <string>
-#include <unordered_map>
 
 namespace assets {
     
@@ -25,16 +24,12 @@ namespace assets {
             GLint attribute_location(std::string name) const;
             GLint uniform_location(std::string name) const;
             GLint uniform_block_binding(std::string name) const;
-            inline GLbitfield type_bitmask() const { return _type_bitmask; }
+            inline GLbitfield type_bitmask() const { return m_type_bitmask; }
         
-            operator GLuint() { return _program; }
+            explicit operator GLuint() { return m_program; }
 
         private:
-        
-            std::unordered_map<std::string, GLint> _used_attrib_locations;  ///< Map of used attributes 
-            std::unordered_map<std::string, GLint> _used_uniform_locations;
-
-            GLbitfield _type_bitmask;
-            GLuint _program;
+            GLbitfield m_type_bitmask;
+            GLuint m_program;
     };
 }
