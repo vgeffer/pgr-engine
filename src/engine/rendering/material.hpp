@@ -12,7 +12,7 @@
 namespace rendering {
 
     /// @todo [Mid-Term]: Add support for dynamic materials
-    /// @todo [Mid-Term]: Create and implement Copy on Update mechanism
+    /// @todo [Long-Term]: Create and implement Copy on Update mechanism
     /// @todo [Long-Term]: Material caching
 
     class material {
@@ -30,7 +30,7 @@ namespace rendering {
             inline std::unordered_map<GLbitfield, std::shared_ptr<assets::shader_stage>>& shader_stages() { return m_shader_stages; }
 
         private:
-            struct m_material_data {
+            struct material_data {
                 glm::vec3 m_ambient,
                           m_diffuse,
                           m_specular;
@@ -44,7 +44,13 @@ namespace rendering {
                 std::array<int, 2> blend_map_ids;
 
                 glm::ivec4 m_bound_textures_count;
-            } m_data;
+            };
+        
+        private:
+            void m_fill_empty_shaders();
+    
+        private:
+            material_data m_data;
 
             std::array<std::shared_ptr<assets::texture>, 2> m_specular_textures;
             std::array<std::shared_ptr<assets::texture>, 2> m_diffuse_textures;

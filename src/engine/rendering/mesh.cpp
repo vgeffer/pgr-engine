@@ -5,8 +5,6 @@
 #include <string_view>
 #include "../assets/model.hpp"
 #include "../assets/loader.hpp"
-#include "../assets/displacement.hpp"
-
 
 using namespace glm;
 using namespace rendering;
@@ -34,17 +32,6 @@ mesh_instance::mesh_instance(scene::scene_node* parent, const utils::resource& r
         m_mesh = std::move(assets::loader::load<assets::model>(
             res.deserialize<std::string>("mesh/path")
         ));
-
-    else if (type == "displacement") {
-        m_mesh = std::move(assets::loader::load<assets::displacement>(
-            res.deserialize<std::string>("mesh/path")
-        ));
-    }
-    
-    else if (type == "raw_displacement")
-        m_mesh = std::make_shared<assets::displacement>(
-            res.deserialize<nlohmann::json>("mesh/data")
-        );
 
     else throw std::runtime_error("Unknown mesh type encountered!");
 }

@@ -16,237 +16,230 @@ namespace utils {
     template <typename T> class observer_ptr;
     template <typename T> class observable_ptr;   
 
-    template <typename _D, typename _S> observable_ptr<_D> observer_cast(observable_ptr<_S>&& ptr);
-    template <typename _D, typename _S> observer_ptr<_D> observer_cast(observer_ptr<_S>&& ptr);
+    template <typename D, typename S> observable_ptr<D> observer_cast(observable_ptr<S>&& ptr);
+    template <typename D, typename S> observer_ptr<D> observer_cast(observer_ptr<S>&& ptr);
 
+    namespace _internal {
 
-    /// @brief Internal state of the @c observable_ptr and all its observers
-    /// @private
-    struct _observable_state {
-        size_t active_observers;    ///< Number of active observers of this observable pointer
-        bool ptr_valid;             ///< Flag, if upstream observable pointer is still valid
-    };
-
+        /// @brief Internal state of the @c observable_ptr and all its observers
+        /// @private
+        struct observable_state {
+            size_t active_observers;    ///< Number of active observers of this observable pointer
+            bool ptr_valid;             ///< Flag, if upstream observable pointer is still valid
+        };
+    }
 
     /// @brief A smart pointer that has the ablility to spawn "read-only" observers
     ///
     /// This class satisfies the requirements of @a MoveConstructible and @a MoveAssignable, however it is neither @a CopyConstructible nor @a CopyAssignable
     /// @warning This implementation is not thread-safe! 
     /// @see observer_ptr, observer_cast, make_observable
-    template <typename _T> 
-        class observable_ptr {
+    template <typename T> 
+    class observable_ptr {
 
-            /* Assert that only copyable _Ts are used to create observable ptr */
-            static_assert(std::is_copy_constructible<_T>::value);
+        /* Assert that only copyable Ts are used to create observable ptr */
+        static_assert(std::is_copy_constructible<T>::value);
 
-            /* So this class does not feel lonely <3 */   
-            friend class observer_ptr<_T>;
-            template<typename _D, typename _S> friend observable_ptr<_D> observer_cast(observable_ptr<_S>&& ptr);
+        /* So this class does not feel lonely <3 */   
+        friend class observer_ptr<T>;
+        template<typename D, typename S> friend observable_ptr<D> observer_cast(observable_ptr<S>&& ptr);
 
-            public:
-                observable_ptr()
-                    : _data(nullptr), _state(new _observable_state{0, false}) {}
+        public:
+            constexpr observable_ptr() noexcept
+                : m_data(nullptr), m_state(new _internal::observable_state{0, false}) {}
 
-                observable_ptr(_T* data)
-                    : _data(data), _state(new _observable_state{0, true}) {}
+            constexpr observable_ptr(T* data) noexcept
+                : m_data(data), m_state(new _internal::observable_state{0, true}) {}
 
-                observable_ptr(observable_ptr<_T>&& other) noexcept
-                    : _data(other._data), _state(other._state) {
+            constexpr observable_ptr(observable_ptr<T>&& other) noexcept
+                : m_data(other.m_data), m_state(other.m_state) {
 
-                    /* Invalidate the old object */
-                    other._state = nullptr;
-                    other._data = nullptr;
+                /* Invalidate the old object */
+                other.m_state = nullptr;
+                other.m_data = nullptr;
+            }
+
+            ~observable_ptr() noexcept {
+
+                /* If state is valid, delete it */
+                if (m_state != nullptr) {
+
+                    /* Mark _data as invalid */
+                    m_state->ptr_valid = false;
+
+                    /* If there are no active observers, delete the _state struct */
+                    if (m_state->active_observers == 0)
+                        delete m_state;
                 }
+            
+                /* Delete the underlying data */
+                delete m_data;
+            }
 
-                ~observable_ptr() noexcept {
+            constexpr observable_ptr<T>& operator=(observable_ptr<T>&& other) noexcept {
+            
+                /* Delete old _state, since new one is going to get moved in */
+                if (m_state != nullptr)
+                    delete m_state;
 
-                    /* If state is valid, delete it */
-                    if (_state != nullptr) {
-                        /* Mark _data as invalid */
-                        _state->ptr_valid = false;
+                /* Delete old _data */ 
+                delete m_data;
 
-                        /* If there are no active observers, delete the _state struct */
-                        if (_state->active_observers == 0)
-                            delete _state;
-                    }
+                /* Move over data */
+                m_data = other.m_data;
+                m_state = other.m_state;
 
-                    /* Delete the underlying data */
-                    delete _data;
-                }
+                /* Invalidate the old object */
+                other.m_data = nullptr;
+                other.m_state = nullptr;
+                return *this;
+            }
 
-                constexpr observable_ptr<_T>& operator=(observable_ptr<_T>&& other) {
-                
-                    /* Delete old _state, since new one is going to get moved in */
-                    if (_state != nullptr)
-                        delete _state;
+            constexpr T& operator*() const { 
+                if (m_data == nullptr) throw std::runtime_error("Trying to dereference an invalid pointer");
+                return *m_data; 
+            }               
+            constexpr T* operator->() const { 
+                if (m_data == nullptr) throw std::runtime_error("Trying to dereference an invalid pointer");
+                return m_data; 
+            }
+            constexpr observer_ptr<T> observer() {
+                if (m_state == nullptr || !m_state->ptr_valid)
+                    throw std::runtime_error("observable_ptr does not contain any valid data to be observed!");
+                /* Register the observer */
+                m_state->active_observers++;
+                return observer_ptr<T>(m_data, m_state);
+            }
 
-                    /* Delete old _data */ 
-                    delete _data;
+        private:
+            constexpr observable_ptr(T* data, _internal::observable_state* state) noexcept
+                : m_data(data), m_state(state) {}
 
-                    /* Move over data */
-                    _data = other._data;
-                    _state = other._state;
-
-                    /* Invalidate the old object */
-                    other._data = nullptr;
-                    other._state = nullptr;
-                    return *this;
-                }
-
-                _T& operator*() { 
-
-                    if (_data == nullptr) throw std::runtime_error("Trying to dereference an invalid pointer");
-                    return *_data; 
-                }               
-
-                _T* operator->() { 
-
-                    if (_data == nullptr) throw std::runtime_error("Trying to dereference an invalid pointer");
-                    return _data; 
-                }
-
-                constexpr observer_ptr<_T> observer() {
-
-                    if (_state == nullptr || !_state->ptr_valid)
-                        throw std::runtime_error("observable_ptr does not contain any valid data to be observed!");
-
-                    /* Register the observer */
-                    _state->active_observers++;
-                    return observer_ptr<_T>(_data, _state);
-                }
-
-            private:
-                constexpr observable_ptr(_T* data, _observable_state* state)
-                    : _data(data), _state(state) {}
-
-                _T* _data;
-                _observable_state* _state;
+            T* m_data;
+            _internal::observable_state* m_state;
         };
 
     /// @brief A "read-only" view of the parent @c observable_ptr
     ///
     /// Unlike @c observable_ptr, this class satisfies the requirements of @a CopyConstructible and @a CopyAssignable
     /// @warning This implementation is not thread-safe! 
-    template <typename _T> 
-        class observer_ptr {
+    template <typename T> 
+    class observer_ptr {
             
-            /* So this class does not feel lonely <3 */   
-            friend class observable_ptr<_T>;
-            template<typename _D, typename _S> friend observable_ptr<_D> observer_cast(observable_ptr<_S>&& ptr);
-            template<typename _D, typename _S> friend observer_ptr<_D> observer_cast(observer_ptr<_S>&& ptr); /* For the private constructor */
+        /* So this class does not feel lonely <3 */   
+        friend class observable_ptr<T>;
+        template<typename D, typename S> friend observable_ptr<D> observer_cast(observable_ptr<S>&& ptr);
+        template<typename D, typename S> friend observer_ptr<D> observer_cast(observer_ptr<S>&& ptr); /* For the private constructor */
             
-            public:
-                observer_ptr()
-                    : _data(nullptr), _state(nullptr) {}
+        public:
+            constexpr observer_ptr() noexcept
+                : m_data(nullptr), m_state(nullptr) {}
 
-                ~observer_ptr() { 
+            ~observer_ptr() noexcept { 
 
-                    /* This object was moved and has it's state taken over */
-                    if (_state == nullptr)
-                        return;
-
-                    /* Decrease number of active observers */
-                    _state->active_observers--;
-
-                    /* If pointer is invalid and there are no active observers, delete _state */
-                    /* If the pointer is still valid, it may spawn more observers in the future */
-                    if (!_state->ptr_valid && _state->active_observers == 0)
-                        delete _state;
-
-                    /* No need to delete *data as this is handled by the parent observable_ptr */
-                }
-
-                observer_ptr(const observer_ptr<_T>& other)
-                    : _data(other._data), _state(other._state) {
-
-                    /* As observer_ptr does not manage data, a simple copy of the pointer can be used */
-                    /* If state is valid, increase instance count */
-                    if (_state != nullptr)
-                        _state->active_observers++;
-                }
+                /* This object was moved and has it's state taken over */
                 
-                observer_ptr(observer_ptr<_T>&& other)
-                    : _data(other._data), _state(other._state) {
-
-                    other._data = nullptr;
-                    other._state = nullptr;
-                }
-
-                inline bool valid() const { return _state != nullptr && _state->ptr_valid; }
-
-                constexpr observer_ptr<_T>& operator=(const observer_ptr<_T>& other) {
+                if (m_state == nullptr)
+                    return;
                 
-                    _data = other._data;
-                    _state = other._state;
-
-                    if (_state != nullptr)
-                        _state->active_observers++;
-
-                    return *this;
-                }
-
-                _T& operator*() const { 
-
-                    if (!valid()) throw std::runtime_error("Trying to dereference an invalid pointer");
-                    return *_data; 
-                }
-    
-                _T* operator->() const { 
+                /* Decrease number of active observers */
+                m_state->active_observers--;
                 
-                    if (!valid()) throw std::runtime_error("Trying to dereference an invalid pointer");
-                    return _data; 
-                }
+                /* If pointer is invalid and there are no active observers, delete _state */
+                /* If the pointer is still valid, it may spawn more observers in the future */
+                if (!m_state->ptr_valid && m_state->active_observers == 0)
+                    delete m_state;
+                
+                /* No need to delete *data as this is handled by the parent observable_ptr */
+            }
 
-                constexpr operator bool() const noexcept { return valid(); }
+            constexpr observer_ptr(const observer_ptr<T>& other) noexcept
+                : m_data(other.m_data), m_state(other.m_state) {
 
-            private:
-                constexpr observer_ptr(_T* data, _observable_state* state) noexcept
-                    : _data(data), _state(state) {}
-
-                _T* _data;
-                _observable_state* _state;
-        };
-
-    /// @brief asd
-    template <typename _D, typename _S>
-        observable_ptr<_D> observer_cast(observable_ptr<_S>&& ptr) {
-
-            if (ptr._data == nullptr)
-                throw std::runtime_error("Object already deleted or moved");
-
-            _D* data = dynamic_cast<_D*>(ptr._data);  
-            _observable_state* state = ptr._state; /* This allows to keep old observers valid even after cast */
-
-            /* Invalidate old object */
-            ptr._data = nullptr;
-            ptr._state = nullptr;
+                /* As observer_ptr does not manage data, a simple copy of the pointer can be used */
+                /* If state is valid, increase instance count */
+                if (m_state != nullptr)
+                    m_state->active_observers++;
+            }
             
-            return observable_ptr<_D>(data, state);     
-        }
+            constexpr observer_ptr(observer_ptr<T>&& other) noexcept
+                : m_data(other.m_data), m_state(other.m_state) {
 
-    template <typename _D, typename _S>
-        observer_ptr<_D> observer_cast(observer_ptr<_S>&& ptr) {
+                other.m_data = nullptr;
+                other.m_state = nullptr;
+            }
 
-            if (!ptr.valid())
-                throw std::runtime_error("Trying to cast an invalid observer!");
+            inline constexpr bool valid() const { return m_state != nullptr && m_state->ptr_valid; }
 
-            _D* data = dynamic_cast<_D*>(ptr._data);
-            _observable_state* state = ptr._state;
+            constexpr observer_ptr<T>& operator=(const observer_ptr<T>& other) noexcept {
+            
+                m_data = other.m_data;
+                m_state = other.m_state;
+                if (m_state != nullptr)
+                    m_state->active_observers++;
+                return *this;
+            }
 
-            /* Invalidate old object */
-            ptr._state = nullptr;
+            constexpr T& operator*() const { 
+                if (!valid()) throw std::runtime_error("Trying to dereference an invalid pointer");
+                return *m_data; 
+            }
 
-            return observer_ptr<_D>(data, state);
-        }     
+            constexpr T* operator->() const { 
+            
+                if (!valid()) throw std::runtime_error("Trying to dereference an invalid pointer");
+                return m_data; 
+            }
+
+            constexpr operator bool() const noexcept { return valid(); }
+
+        private:
+            constexpr observer_ptr(T* data, _internal::observable_state* state) noexcept
+                : m_data(data), m_state(state) {}
+
+            T* m_data;
+            _internal::observable_state* m_state;
+    };
+
+    template <typename D, typename S>
+    observable_ptr<D> observer_cast(observable_ptr<S>&& ptr) {
+
+        if (ptr.m_data == nullptr)
+            throw std::runtime_error("Object already deleted or moved");
+
+        D* data = dynamic_cast<D*>(ptr.m_data);  
+        _internal::observable_state* state = ptr.m_state; /* This allows to keep old observers valid even after cast */
+
+        /* Invalidate old object */
+        ptr.m_data = nullptr;
+        ptr.m_state = nullptr;
+            
+        return observable_ptr<D>(data, state);     
+    }
+
+    template <typename D, typename S>
+    observer_ptr<D> observer_cast(observer_ptr<S>&& ptr) {
+
+        if (!ptr.valid())
+            throw std::runtime_error("Trying to cast an invalid observer!");
+
+        D* data = dynamic_cast<D*>(ptr.m_data);
+        _internal::observable_state* state = ptr.m_state;
+
+        /* Invalidate old object */
+        ptr.m_state = nullptr;
+
+        return observer_ptr<D>(data, state);
+    }     
         
     /// @brief Constructs an @c observable_ptr from provided arguments
     ///
     /// This function takes variable number of arguments and forwards them to construct a new instance of an object of type @c T.
     /// @return @c observable_ptr to an object of type @c T. An @c observable_ptr returned this way is @b always @b valid.
-    template <typename _T, typename ..._Args>
-        observable_ptr<_T> make_observable(_Args&&... args) { 
-            return observable_ptr<_T>(new _T(
-                std::forward<_Args>(args)...
-            ));
-        }
+    template <typename T, typename ...Args>
+    observable_ptr<T> make_observable(Args&&... args) { 
+        return observable_ptr<T>(new T(
+            std::forward<Args>(args)...
+        ));
+    }
 };

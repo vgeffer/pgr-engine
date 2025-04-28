@@ -1,6 +1,8 @@
 #include "material.hpp"
 #include <array>
+#include <exception>
 #include <glm/fwd.hpp>
+#include <stdexcept>
 #include <vector>
 #include <iostream>
 #include "renderer.hpp"
@@ -25,6 +27,7 @@ material::material()
     m_data.m_alpha = 0.0f;
 
     m_data.m_bound_textures_count = ivec4(0);
+    m_fill_empty_shaders();
 }
 
 material::material(const utils::resource& res)
@@ -44,6 +47,8 @@ material::material(const utils::resource& res)
         }
         m_shader_stages[shader->type_bitmask()] = shader;
     }
+    /* Add shaders to the empty spots */
+    m_fill_empty_shaders();
 
     /* Deserialize internal data structure */
     m_data.m_ambient = res.deserialize<vec3>("colors/ambient", vec3(0, 1, 1));
@@ -120,7 +125,6 @@ void material::use() {
         m_data.blend_map_ids[i] = m_blend_maps[i]->texture_index();
     }
 
-
     /* Register material with renderer */
     auto [handle, offset] = renderer::instance()->material_allocator().alloc_buffer(sizeof(m_data));
     rendering::renderer::instance()->material_allocator().buffer_data(handle, sizeof(m_data), &m_data);
@@ -128,4 +132,20 @@ void material::use() {
     /* Calculate index */
     m_material_index = offset / sizeof(m_data);
     m_buffer_handle = handle;
+}
+
+void material::m_fill_empty_shaders() {
+
+    const auto& default_shaders = renderer::instance()->default_shaders();
+
+    for (GLbitfield type : assets::shader_stage::c_known_stage_types) {
+        
+        if (m_shader_stages.find(type) != m_shader_stages.end())
+            continue;
+        
+        try { m_shader_stages[type] = default_shaders.at(type); }
+        catch(std::exception& e) { throw std::logic_error(
+            std::string("An error occured during emplacing default shaders: ") + e.what()
+        ); }
+    }
 }
