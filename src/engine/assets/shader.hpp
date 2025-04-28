@@ -7,11 +7,16 @@
 
 #include "../../lib/glad/glad.h"
 #include "asset.hpp"
+#include <array>
 #include <string>
 
 namespace assets {
-    
     class shader_stage : public asset{
+        
+        public:
+            static constexpr std::array<GLbitfield, 2> c_known_stage_types = {
+                GL_VERTEX_SHADER_BIT, GL_FRAGMENT_SHADER_BIT
+            };
     
         public:
             /// @brief Constructor for the shader_stage class

@@ -12,9 +12,9 @@ namespace rendering {
 
     class mesh {
         public:
-            struct vertex_t{
+            struct vertex{
 
-                vertex_t(glm::vec3&& p, glm::vec3&& n, glm::vec3&& t, glm::vec3&& bt, glm::vec2&& uv)
+                constexpr vertex(glm::vec3&& p, glm::vec3&& n, glm::vec3&& t, glm::vec3&& bt, glm::vec2&& uv)
                     : position(p), normal(n), tangent(t), bitangent(bt), uv(uv) {}
 
                 glm::vec3 position, 

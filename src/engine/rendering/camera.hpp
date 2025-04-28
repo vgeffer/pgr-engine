@@ -17,8 +17,8 @@ namespace rendering {
             glm::mat4x4 view() const;
             glm::mat4x4 projection() const;
 
-            inline glm::vec3 up() const;
-            inline glm::vec3 forward() const;
+            const glm::vec3 up() const;
+            const glm::vec3 forward() const;
 
             /* Setting projection parameters also updates stored matrices */
             inline float fov() const { return m_fov; }

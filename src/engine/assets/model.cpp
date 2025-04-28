@@ -36,7 +36,7 @@ model::model(string path, bool parse_material)
     /* Grab the 0th mesh */
     const aiMesh* mesh = scene->mMeshes[0];
 
-    vector<mesh::vertex_t> vertices;
+    vector<mesh::vertex> vertices;
     vertices.reserve(mesh->mNumVertices);
 
     /* Hopefully -O2 will do it's job */
@@ -58,26 +58,24 @@ model::model(string path, bool parse_material)
     m_vert_handle = vert_handle;
     m_first_vertex = vert_offset / sizeof(vertices[0]);
 
-    if (mesh->HasFaces()) {
+    if (!mesh->HasFaces())
+        throw std::logic_error("Non-indexed meshes not supported yet!");
 
-        m_indexed = true;
-        vector<uint32_t> indices;
-        indices.reserve(mesh->mNumFaces * 3); /* A reasonable estimate, since all faces are triangles */
-
-        for (size_t i = 0; i < mesh->mNumFaces; i++) {
-
-            const aiFace face = mesh->mFaces[i];
-            for (size_t e = 0; e < face.mNumIndices; e++)         
-                indices.emplace_back(face.mIndices[e]);   
-        }
-
-        /* Reserve buffer for the indices */
-        auto [elem_handle, elem_offset] = renderer::instance()->element_allocator().alloc_buffer(indices.size() * sizeof(indices[0]));
-        m_element_count = indices.size();
-
-        /* Upload the data */
-        renderer::instance()->element_allocator().buffer_data(elem_handle, indices.size() * sizeof(indices[0]), indices.data());
-        m_elem_handle = elem_handle;
-        m_first_index = elem_offset / sizeof(indices[0]);
+    m_indexed = true;
+    vector<uint32_t> indices;
+    indices.reserve(mesh->mNumFaces * 3); /* A reasonable estimate, since all faces are triangles */
+    for (size_t i = 0; i < mesh->mNumFaces; i++) {
+        const aiFace face = mesh->mFaces[i];
+        for (size_t e = 0; e < face.mNumIndices; e++)         
+            indices.emplace_back(face.mIndices[e]);   
     }
+    
+    /* Reserve buffer for the indices */
+    auto [elem_handle, elem_offset] = renderer::instance()->element_allocator().alloc_buffer(indices.size() * sizeof(indices[0]));
+    m_element_count = indices.size();
+
+    /* Upload the data */
+    renderer::instance()->element_allocator().buffer_data(elem_handle, indices.size() * sizeof(indices[0]), indices.data());
+    m_elem_handle = elem_handle;
+    m_first_index = elem_offset / sizeof(indices[0]);   
 }

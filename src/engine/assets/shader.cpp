@@ -16,8 +16,7 @@ using namespace std;
 using namespace utils;
 using namespace assets;
 
-static const unordered_map<string, GLenum> EXTENSION_TYPE_MAP = {
-    {".geom", GL_GEOMETRY_SHADER},
+static const unordered_map<string, GLenum> c_extension_type_map = {
     {".frag", GL_FRAGMENT_SHADER},
     {".vert", GL_VERTEX_SHADER}
 };
@@ -32,7 +31,7 @@ shader_stage::shader_stage(string path)
     
     /* Get type from filename */
     string ext = filesystem::path(path).extension();
-    if (auto it = EXTENSION_TYPE_MAP.find(ext); it != EXTENSION_TYPE_MAP.cend())
+    if (auto it = c_extension_type_map.find(ext); it != c_extension_type_map.cend())
         m_type = it->second;
     else throw logic_error("Unknown shader type encountered");
 

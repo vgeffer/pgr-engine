@@ -57,11 +57,11 @@ mat4x4 camera::projection() const {
     return perspective(m_fov, asp_ratio, m_near, m_far);
 }
 
-vec3 camera::up() const {
+const vec3 camera::up() const {
     return normalize(toMat3(m_parent->rotation) * UP);
 }
 
-vec3 camera::forward() const {
+const vec3 camera::forward() const {
    return normalize(toMat3(m_parent->rotation) * FORWARD);
 }
 

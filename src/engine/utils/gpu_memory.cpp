@@ -12,8 +12,6 @@ using namespace utils;
 gpu_allocator::gpu_allocator(size_t base_size, GLbitfield buffer_hints) 
     : m_buffer_size(base_size), m_buffer_hints(buffer_hints) {
 
-    logger::debug << "Allocating GPU buffer of size " << base_size << std::endl;
-
     glCreateBuffers(1, &m_buffer);
     glNamedBufferStorage(m_buffer, base_size, nullptr, GL_DYNAMIC_STORAGE_BIT); 
     m_chunks.emplace_front(base_size, 0, false); /* Insert root chunk */
@@ -67,7 +65,6 @@ size_t gpu_allocator::buffer_data(const gpu_allocator::handle& handle, size_t da
                      << ". Only " << size_to_write << " bytes will be written" << std::endl; 
 
     glNamedBufferSubData(m_buffer, handle->offset, size_to_write, data);
-    logger::debug << "Buffer: " << m_buffer << ": Writing " << data_size << " bytes at offset " << handle->offset << ". " << size_to_write << " bytes written." << std::endl;
     return size_to_write;    
 }
 

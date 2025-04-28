@@ -22,6 +22,8 @@ namespace utils {
         return tokens;
     }
 
+    template <class Tp>
+    const bool is_last_in_container(const Tp& container, const typename Tp::iterator& iter) {
+        return (iter != container.end()) && (iter == --container.end());
+    }
 };
-
-
