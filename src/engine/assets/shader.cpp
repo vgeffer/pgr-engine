@@ -7,10 +7,8 @@
 #include <iostream>
 #include <fstream>
 
-
 #include "shader.hpp"
 #include "../utils/buffer.hpp"
-#include "../utils/logger.hpp"
 
 using namespace std;
 using namespace utils;
@@ -79,12 +77,8 @@ shader_stage::shader_stage(string path)
         utils::buffer<GLchar> error_buffer = utils::buffer<GLchar>(error_len);
         glGetShaderInfoLog(shader, error_len, &error_len, error_buffer);
 
-        /// @todo [Mid-Term]: Move to internal logging (Once ready)
-        logger::error << "In file " << path << ":\n";
-        logger::error << "  " << error_buffer << std::endl;
-
-        /* Output source code of the file*/
-        logger::info << " -> Source: \n" << src_buffer.c_str() << std::endl;
+        std::cerr << "[ERROR] In file " << path << ":\n";
+        std::cerr << "  " << error_buffer << std::endl;
 
         glDeleteShader(shader);
         throw runtime_error("Shader compilation error"); 
@@ -109,8 +103,8 @@ shader_stage::shader_stage(string path)
         utils::buffer<GLchar> error_buffer = utils::buffer<GLchar>(error_len);
         glGetShaderInfoLog(shader, error_len, &error_len, error_buffer);
 
-        logger::error << "In file " << path << ":\n";
-        logger::error << "  " << error_buffer << std::endl;
+        std::cerr << "[ERROR] In file " << path << ":\n";
+        std::cerr << "  " << error_buffer << std::endl;
         glDeleteShader(shader);
         throw runtime_error("Shader linking error"); 
     }   

@@ -5,7 +5,9 @@
 
 
 namespace assets {
+
     class scene_template : public asset {
+    
         public:
             scene_template(const std::string path);
             ~scene_template() override = default;
