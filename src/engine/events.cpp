@@ -2,10 +2,9 @@
 #include "game_window.hpp"
 #include "window/key_code.hpp"
 #include <GLFW/glfw3.h>
-#include <cstdint>
 #include <glm/fwd.hpp>
+#include <cstdint>
 #include <stdexcept>
-#include <sys/types.h>
     
 using namespace std;
 
@@ -19,12 +18,12 @@ events::~events() {
     s_instance = nullptr;
 }
 
-/* Helper directives for prettier code, mainly for static functions */
-#define GET_KEY(key) (s_instance->m_key_buffer[static_cast<uint16_t>(key) >> 6] &   )
-#define GET_BUTTON(buffer, button) (_instance->_mouse_button_buffer[buffer] & (1 << ((uint8_t)button & 0b0111)))
-
 void events::apply_callbacks(game_window& window) {
 
+    /* Get initial mouse position - so no weirdness occurs */
+    double initial_mouse_x, initial_mouse_y;
+    glfwGetCursorPos(window.props().glfw_handle, &initial_mouse_x, &initial_mouse_y);
+    m_mouse_pos = glm::vec2(initial_mouse_x, initial_mouse_y);
 
     /* Since this app is strictly single-window, info about it can be safely ignored */
     glfwSetMouseButtonCallback(window.props().glfw_handle, [](GLFWwindow*, int button, int action, int mods) {
@@ -69,7 +68,9 @@ void events::process_frame() {
     /* Update state for all the mouse buttons */
     m_mouse_button_buffer ^= m_mouse_button_delta_buffer;
     m_mouse_button_delta_buffer = 0;
-    
+
+    m_mouse_delta = glm::vec2(0);
+
     glfwPollEvents();
 }
 
@@ -92,7 +93,7 @@ bool events::is_key_held_down(key_code key) {
     uint64_t mask = 1ull << (static_cast<uint16_t>(key) & 0x3F);
 
     return ((s_instance->m_key_buffer[static_cast<uint16_t>(key) >> 6]) & mask) &&
-           !((s_instance->m_key_delta_buffer[static_cast<uint16_t>(key) >> 6]) & mask); 
+           !((s_instance->m_key_delta_buffer[static_cast<uint16_t>(key) >> 6]) & mask);
 }
 
 bool events::is_key_released(key_code key) {
@@ -103,7 +104,7 @@ bool events::is_key_released(key_code key) {
     uint64_t mask = 1ull << (static_cast<uint16_t>(key) & 0x3F);
 
     return ((s_instance->m_key_buffer[static_cast<uint16_t>(key) >> 6]) & mask) &&
-            ((s_instance->m_key_delta_buffer[static_cast<uint16_t>(key) >> 6]) & mask); 
+           ((s_instance->m_key_delta_buffer[static_cast<uint16_t>(key) >> 6]) & mask); 
 }
 
 bool events::is_key_held_up(key_code key) {
@@ -113,33 +114,54 @@ bool events::is_key_held_up(key_code key) {
 
     uint64_t mask = 1ull << (static_cast<uint16_t>(key) & 0x3F);
 
-    return ((s_instance->m_key_buffer[static_cast<uint16_t>(key) >> 6]) & mask) &&
+    return !((s_instance->m_key_buffer[static_cast<uint16_t>(key) >> 6]) & mask) &&
            !((s_instance->m_key_delta_buffer[static_cast<uint16_t>(key) >> 6]) & mask); 
 }
+ 
+bool events::is_mouse_pressed(mouse_code button) {        
+        
+    if (!s_instance)
+        throw std::logic_error("Event handler not initialised");
+
+    uint8_t mask = 1 << (static_cast<uint8_t>(button) & 0x07);
     
-//bool events::is_mouse_pressed(mouse_code button) {
-//
-//    if (!s_instance)
-//        throw std::logic_error("Event handler not initialised");
-//
-//    return GET_BUTTON(CURRENT_BUFFER, button) && !GET_BUTTON(LAST_BUFFER, button);
-//}
-//
-//bool events::is_mouse_held(mouse_code button) {
-//
-//    if (!s_instance)
-//        throw std::logic_error("Event handler not initialised");
-//
-//    return GET_BUTTON(CURRENT_BUFFER, button) && GET_BUTTON(LAST_BUFFER, button);
-//}
-//
-//bool events::is_mouse_released(mouse_code button) {
-//
-//    if (!s_instance)
-//        throw std::logic_error("Event handler not initialised");
-//
-//    return !GET_BUTTON(CURRENT_BUFFER, button) && GET_BUTTON(LAST_BUFFER, button);
-//}
+    return !(s_instance->m_mouse_button_buffer & mask) &&
+           (s_instance->m_mouse_button_delta_buffer & mask); 
+}
+    
+bool events::is_mouse_held_down(mouse_code button) {
+        
+    if (!s_instance)
+        throw std::logic_error("Event handler not initialised");
+
+    uint8_t mask = 1 << (static_cast<uint8_t>(button) & 0x07);
+
+    return (s_instance->m_mouse_button_buffer & mask) &&
+          !(s_instance->m_mouse_button_delta_buffer & mask); 
+
+}
+
+bool events::is_mouse_released(mouse_code button) {
+    
+    if (!s_instance)
+        throw std::logic_error("Event handler not initialised");
+
+    uint8_t mask = 1 << (static_cast<uint8_t>(button) & 0x07);
+    
+    return !(s_instance->m_mouse_button_buffer & mask) &&
+           (s_instance->m_mouse_button_delta_buffer & mask); 
+}
+
+bool events::is_mouse_held_up(mouse_code button) {
+        
+    if (!s_instance)
+        throw std::logic_error("Event handler not initialised");
+
+    uint8_t mask = 1 << (static_cast<uint8_t>(button) & 0x07);
+
+    return !(s_instance->m_mouse_button_buffer & mask) && 
+           !(s_instance->m_mouse_button_delta_buffer & mask);
+}
 
 glm::vec2 events::mouse_pos() {
 

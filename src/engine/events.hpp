@@ -26,8 +26,10 @@ class events {
         static bool is_key_held_up(key_code key);
 
         static bool is_mouse_pressed(mouse_code button);
-        static bool is_mouse_held(mouse_code button);
+        static bool is_mouse_held_down(mouse_code button);
         static bool is_mouse_released(mouse_code button);
+        static bool is_mouse_held_up(mouse_code button);
+        
 
         static glm::vec2 mouse_pos();
         static glm::vec2 mouse_delta();
