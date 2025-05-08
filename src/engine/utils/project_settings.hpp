@@ -27,7 +27,7 @@ namespace utils {
             static inline int tex_mag_filter() { CHECK_AND_RETURN(m_tex_mag_filter); }
             static inline float physics_interval() { CHECK_AND_RETURN(m_physics_interval); }   
             static inline const std::string& default_scene_path() { CHECK_AND_RETURN(m_default_scene_path); }
-
+            static inline const std::vector<std::string>& default_shaders() { CHECK_AND_RETURN(m_default_shaders); }
 
         private:
             inline static project_settings* s_instance = nullptr;
@@ -50,6 +50,7 @@ namespace utils {
 
             /* Game */
             std::string m_default_scene_path;
+            std::vector<std::string> m_default_shaders;
     };
 }
     

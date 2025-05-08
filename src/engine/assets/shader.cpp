@@ -11,7 +11,6 @@
 #include "../utils/buffer.hpp"
 
 using namespace std;
-using namespace utils;
 using namespace assets;
 
 static const unordered_map<string, GLenum> c_extension_type_map = {
