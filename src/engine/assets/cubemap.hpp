@@ -35,7 +35,6 @@ namespace assets {
             GLuint cubemap_object () const { return m_cubemap_obj; } 
 
         private:
-
             GLuint m_cubemap_obj;   ///< OpenGL texture object for the cubemap                   
             int m_w,                ///< Single texture's width
                 m_h,                ///< Single texture's height                        

@@ -1,5 +1,5 @@
 ///
-/// @file asset.hpp
+/// @file laoder.hpp
 /// @author geffevil
 ///
 #pragma once
@@ -35,7 +35,7 @@ namespace assets {
             /// If a cached instance already exists and caching policy permits, the cached instance is used and asset is not loaded.
             /// @param path Filesystem path to the requested asset
             /// @param policy How asset cache should behave 
-            /// @return Shared pointer to the loaded asset
+            /// @returns Shared pointer to the loaded asset
             ///
             /// @see caching_policy
             /// @see assets::asset 
@@ -82,7 +82,6 @@ namespace assets {
                 if (s_instance != nullptr)              
                     s_instance->m_keepalive_list.clear(); 
             }
-
 
         private:
             inline static loader* s_instance = nullptr;

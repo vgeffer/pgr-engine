@@ -12,7 +12,6 @@ using namespace std;
 using namespace utils;
 using namespace assets;
 
-
 cubemap::cubemap()
     : m_cubemap_obj(0), m_w(0), m_h(0), m_channels(0) {}
 

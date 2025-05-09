@@ -16,10 +16,11 @@ using namespace std;
 using namespace assets;
 using namespace rendering;
 
-model::model(string path, bool parse_material) 
+model::model(const string& path) 
     : mesh() {    
 
     /// @todo [Long-Term]: Down the line, replace with custom loader
+    /// @todo [Mid-Term]: Allow parsing of model's own material files
     Assimp::Importer importer;
     const aiScene* scene = importer.ReadFile(path.c_str(), 0
         | aiProcess_Triangulate 
