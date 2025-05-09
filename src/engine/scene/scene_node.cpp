@@ -3,12 +3,12 @@
 #include <glm/ext/matrix_float4x4.hpp>
 #include <glm/ext/matrix_transform.hpp>
 #include <glm/fwd.hpp>
+#include <iostream>
 #include <stdexcept>
 #include <unordered_map>
 #include <vector>
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtx/quaternion.hpp>
-#include "../utils/logger.hpp"
 
 using namespace std;
 using namespace glm;
@@ -25,7 +25,7 @@ scene_node::scene_node(const string& name, scene_node::node_type type)
 
 scene_node::scene_node(const resource& res)
     : m_name(res.deserialize<std::string>("name")), m_parent(nullptr), m_enabled(true), m_visible(true), 
-      m_in_scene(false), m_type(node_type::GENERIC) {
+      m_in_scene(false), m_type(scene_node::node_type::GENERIC) {
 
     position = res.deserialize<vec3>("position", vec3(0, 0, 0));
     rotation = res.deserialize<quat>("rotation", quat(0, 0, 0, 0));
@@ -37,7 +37,7 @@ scene_node::scene_node(const resource& res)
 
         auto spawner = _internal::component_registry::registered_components.find(name);
         if (spawner == _internal::component_registry::registered_components.end()) {
-            logger::warn << "Unknown component " << name << "! Skipping..." << std::endl;     
+            std::cerr << "[WARNING] Unknown component " << name << "! Skipping..." << std::endl;     
             continue;
         }
 
@@ -104,12 +104,12 @@ void scene_node::add_child(scene_node* node) {
 
     /* Check for invalid nodes */
     if (node == nullptr || node->m_type == node_type::ROOT) {
-        logger::error << "NULL node or ROOT node provided, will not be inserted as child!" << std::endl;
+        std::cerr << "[ERROR] NULL node or ROOT node provided, will not be inserted as child!" << std::endl;
         return;
     }
 
     if (m_children.find(node->m_name) != m_children.end()) {
-        logger::error << "Duplicate node " << node->m_name << "! Will not be inserted as child!" << std::endl;
+        std::cerr << "[WARNING] Duplicate node " << node->m_name << "! Will not be inserted as child!" << std::endl;
     }
 
     m_children.emplace(node->m_name, node);

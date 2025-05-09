@@ -110,7 +110,6 @@ MAKE_JSON_PARSABLE(glm::vec3, [] (const utils::resource& res){
 MAKE_JSON_PARSABLE(glm::quat, [] (const utils::resource& res){
     
     /* Create quat from euler angles */
-    /// @todo: from regular quat
     return glm::quat(glm::vec3(
         res.deserialize<float>("p"),
         res.deserialize<float>("y"),

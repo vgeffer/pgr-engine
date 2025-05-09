@@ -22,7 +22,7 @@ namespace scene {
 
         public:
             enum class node_type {
-                ROOT, GENERIC
+                GENERIC, ROOT
             };
 
             scene_node(const std::string& name);
@@ -94,10 +94,12 @@ namespace scene {
             virtual void update(float delta) {}
             virtual void fixed_update(float delta) {}
 
-            inline scene_node* parent() const {return m_parent; }
+            inline scene_node* parent() const { return m_parent; }
 
         protected:
             node_component(scene_node* parent) : m_parent(parent) {}
+
+        private:
             scene_node* m_parent;
     };
 
