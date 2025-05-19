@@ -44,6 +44,16 @@ enum class key_code : uint16_t {
     NUM7 = GLFW_KEY_7,
     NUM8 = GLFW_KEY_8,
     NUM9 = GLFW_KEY_9,
+
+    F1 = GLFW_KEY_F1,
+    F2 = GLFW_KEY_F2,
+    F3 = GLFW_KEY_F3,
+    F4 = GLFW_KEY_F4,
+    F5 = GLFW_KEY_F5,
+    F6 = GLFW_KEY_F6,
+    F7 = GLFW_KEY_F7,
+    F8 = GLFW_KEY_F8,
+    F9 = GLFW_KEY_F9,
     
     BACKSPACE = GLFW_KEY_BACKSPACE,
     SPACE = GLFW_KEY_SPACE,
@@ -58,8 +68,15 @@ enum class key_code : uint16_t {
     ESC = GLFW_KEY_ESCAPE
 };
 
-enum class mouse_code : uint16_t {
+enum class mouse_code : uint8_t {
     right_button = GLFW_MOUSE_BUTTON_RIGHT,
     left_button = GLFW_MOUSE_BUTTON_LEFT,
     middle_button = GLFW_MOUSE_BUTTON_MIDDLE
+};
+
+enum class cursor_state : uint64_t {
+    cursor_visible = GLFW_CURSOR_NORMAL,
+    cursor_hidden = GLFW_CURSOR_HIDDEN,
+    cursor_mouse_look = GLFW_CURSOR_DISABLED,
+    cursor_lock_to_window = GLFW_CURSOR_CAPTURED,
 };
