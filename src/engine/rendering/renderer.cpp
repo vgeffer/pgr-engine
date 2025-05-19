@@ -1,5 +1,6 @@
 #include "renderer.hpp"
 
+#include <glm/detail/qualifier.hpp>
 #include <stdexcept>
 #include <utility>
 #include <glm/glm.hpp>
@@ -12,7 +13,6 @@
 #include "../utils/project_settings.hpp"
 #include "../runtime.hpp"
 #include "../assets/loader.hpp"
-
 
 using namespace std;
 using namespace glm;
@@ -62,7 +62,7 @@ void renderer::init() {
     m_skybox_first_vertex = s_offset / sizeof(mesh::vertex);
 
     /* Load shaders */
-    m_quad_vertex_shader = loader::load<shader_stage>("shaders/postprocess.vert");
+    m_quad_vertex_shader = loader::load<shader_stage>("shaders/quad.vert");
     m_combination_shader = loader::load<shader_stage>("shaders/combination.frag");
     m_skybox_vertex_shader = loader::load<shader_stage>("shaders/skybox.vert");
     m_skybox_fragment_shader = loader::load<shader_stage>("shaders/skybox.frag");
@@ -104,9 +104,7 @@ void renderer::init() {
     glCreateBuffers(1, &m_light_storage);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, LIGHTS_SSBO, m_light_storage);
 
-    /* Create global depth texture */
-    m_fog_enabled = false;
-    m_fog_color = glm::vec4(0, 0, 0, 1);
+    /* Clear the screen */
     glClearColor(0, 0, 0, 1);
 }
 
@@ -151,7 +149,7 @@ void renderer::set_active_camera(const utils::observer_ptr<camera>& camera) {
         return;
 
     m_active_camera = camera;
-    glBindBufferBase(GL_UNIFORM_BUFFER, CAMERA_UBO, m_active_camera->camera_data());
+    glBindBufferBase(GL_UNIFORM_BUFFER, CAMERA_UBO, camera->camera_data());
 } 
 
 void renderer::set_active_skybox(const std::shared_ptr<assets::cubemap>& skybox) {
@@ -178,7 +176,7 @@ void renderer::request_draw(const observer_ptr<mesh_instance>& mesh_instance, co
         draw_request::object_data{
             transform,
             glm::transpose(glm::inverse(transform)),
-            glm::identity<mat3x3>(),
+            mesh_instance->get_material().uv_mat(),
             mesh_instance->get_material().material_index()
         },
         mesh_instance->get_material().transparent(),
@@ -252,11 +250,12 @@ void renderer::draw_scene() {
 
         /* Bind shader delta */
         for (const auto& stage : pass->shader_delta)
-            m_attach_stage(stage);
+            attach_stage(stage);
 
         /* Set uniforms correctly - Only TWO (engine) uniforms per shader! */
         set_uniform("draw_id_offset", objects_drawn, GL_VERTEX_SHADER_BIT);
         set_uniform("light_count", static_cast<uint>(m_lights.size()), GL_FRAGMENT_SHADER_BIT);
+        set_uniform("global_time", engine_runtime::instance()->global_clock());
 
         /* Draw! */
         glMultiDrawElementsIndirect(
@@ -287,11 +286,12 @@ void renderer::draw_scene() {
     
         /* Bind shader delta */
         for (const auto& stage : pass->shader_delta)
-            m_attach_stage(stage);
+            attach_stage(stage);
 
         /* Set uniforms correctly - Only TWO (engine) uniforms per shader! */
         set_uniform("draw_id_offset", objects_drawn, GL_VERTEX_SHADER_BIT);
         set_uniform("light_count", static_cast<uint>(m_lights.size()), GL_FRAGMENT_SHADER_BIT);
+        set_uniform("global_time", engine_runtime::instance()->global_clock());
 
         /* Draw! */
         glMultiDrawElementsIndirect(
@@ -308,14 +308,15 @@ void renderer::draw_scene() {
     //===============================
     
     /* Set opaque attachment up for drawing */
+    
     glNamedFramebufferDrawBuffers(m_default_target.fbo, g_opaque_attachments.size(), g_opaque_attachments.data());
     glDepthFunc(GL_LEQUAL);
     
     /* If the scene has skybox, draw it! */
     if (m_current_skybox) {
         
-        m_attach_stage(m_skybox_vertex_shader);
-        m_attach_stage(m_skybox_fragment_shader);
+        attach_stage(m_skybox_vertex_shader);
+        attach_stage(m_skybox_fragment_shader);
 
         glDrawArraysInstancedBaseInstance(
             GL_TRIANGLES, 
@@ -354,8 +355,8 @@ void renderer::draw_scene() {
     glBindTexture(GL_TEXTURE_2D, m_default_target.reveal_target);
     
     /* Setup shaders */
-    m_attach_stage(m_quad_vertex_shader);
-    m_attach_stage(m_combination_shader);
+    attach_stage(m_quad_vertex_shader);
+    attach_stage(m_combination_shader);
     
     /* Set uniforms */
     set_uniform("opaque_target", 0);
@@ -384,9 +385,11 @@ void renderer::draw_scene() {
         glBindTexture(GL_TEXTURE_2D, m_postprocess_targets[0].color_target);   
         glActiveTexture(GL_TEXTURE1);
         glBindTexture(GL_TEXTURE_2D, m_default_target.depth_stencil_target);
-        
+        glTexParameteri(GL_TEXTURE_2D, GL_DEPTH_STENCIL_TEXTURE_MODE, GL_DEPTH_COMPONENT);
+
+
         /* Setup shaders */
-        m_attach_stage(*pp_pass);
+        attach_stage(*pp_pass);
         
         /* Set uniforms */
         set_uniform("color_target", 0);
@@ -420,21 +423,16 @@ template <typename T>
 void renderer::set_uniform(std::string uniform_name, const T& val, GLbitfield stage_hint) {
 
     for (auto [type, stage] : m_attached_shader_stages) {
-        GLint location;
-
+        
         /* Check if type is being masked by a hint */
         if (!(type & stage_hint))
             continue;
-     
-        /* Get uniform location - if not found, skip*/
-        if ((location  = glGetUniformLocation(static_cast<GLuint>(*stage), uniform_name.c_str())) < 0)
-            continue;
 
-        m_set_uniform_value<T>(static_cast<GLuint>(*stage), location, val);
+        stage->set_uniform<T>(uniform_name, val);
     }
 }
 
-void renderer::m_attach_stage(const shared_ptr<shader_stage>& stage) {
+void renderer::attach_stage(const shared_ptr<shader_stage>& stage) {
     
     m_attached_shader_stages[stage->type_bitmask()] = stage;
     glUseProgramStages(m_pipeline, stage->type_bitmask(), static_cast<GLuint>(*stage));
@@ -607,58 +605,4 @@ void renderer::m_destroy_fbos() {
         glDeleteFramebuffers(1, &pp_target.fbo);
         glDeleteTextures(1, &pp_target.color_target);
     }
-}
-
-/* Uniform setters - there is a lot of them*/
-template <> void renderer::m_set_uniform_value<int>(GLuint program, GLint location, const int& val) {
-    glProgramUniform1i(program, location, val);
-}
-
-template <> void renderer::m_set_uniform_value<uint>(GLuint program, GLint location, const uint& val) {
-    glProgramUniform1ui(program, location, val);
-}
-
-template <> void renderer::m_set_uniform_value<float>(GLuint program, GLint location, const float& val) {
-    glProgramUniform1f(program, location, val);
-}
-
-template <> void renderer::m_set_uniform_value<bool>(GLuint program, GLint location, const bool& val) {
-    glProgramUniform1i(program, location, val);
-}
-
-template <> void renderer::m_set_uniform_value<ivec2>(GLuint program, GLint location, const ivec2& val) { 
-    glProgramUniform2iv(program, location, 1, value_ptr(val)); 
-}
-
-template <> void renderer::m_set_uniform_value<vec2>(GLuint program, GLint location, const vec2& val) {
-        glProgramUniform2fv(program, location, 1, value_ptr(val));
-}
-
-template <> void renderer::m_set_uniform_value<mat2x2>(GLuint program, GLint location, const mat2x2& val) {
-    glProgramUniformMatrix2fv(program, location, 1, GL_FALSE, value_ptr(val));
-}
-
-template <> void renderer::m_set_uniform_value<ivec3>(GLuint program, GLint location, const ivec3& val) {
-    glProgramUniform3iv(program, location, 1,  value_ptr(val));
-}
-
-template <> void renderer::m_set_uniform_value<vec3>(GLuint program, GLint location, const vec3& val) {
-    glProgramUniform3fv(program, location, 1,  value_ptr(val));
-}
-
-template <> void renderer::m_set_uniform_value<mat3x3>(GLuint program, GLint location, const mat3x3& val) {
-
-    glProgramUniformMatrix3fv(program, location, 1, GL_FALSE, value_ptr(val));
-}
-
-template <> void renderer::m_set_uniform_value<ivec4>(GLuint program, GLint location, const ivec4& val) {
-    glProgramUniform2iv(program, location, 1, value_ptr(val));
-}
-
-template <> void renderer::m_set_uniform_value<vec4>(GLuint program, GLint location, const vec4& val) {
-    glProgramUniform4fv(program, location, 1, value_ptr(val));
-}
-
-template <> void renderer::m_set_uniform_value<mat4x4>(GLuint program, GLint location, const mat4x4& val) {
-    glProgramUniformMatrix4fv(program, location, 1, GL_FALSE, value_ptr(val));
 }

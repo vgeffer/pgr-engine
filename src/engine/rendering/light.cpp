@@ -1,12 +1,10 @@
-#include "light.hpp"
+#include <string>
+#include <glm/glm.hpp>
 #include "renderer.hpp"
-#include <glm/ext/scalar_constants.hpp>
-#include <glm/ext/vector_float3.hpp>
-#include <glm/ext/quaternion_geometric.hpp>
-#include <glm/fwd.hpp>
+#include "light.hpp"
+
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtx/quaternion.hpp>
-
 
 using namespace rendering;
 using namespace rendering::lights;
@@ -28,8 +26,8 @@ light::light(scene::scene_node* parent, light_type type, glm::vec3 ambient, glm:
 
 void light::prepare_draw(const glm::mat4x4& parent_transform) {
     
-    m_data.position = parent_transform * glm::vec4(m_parent->position, 1.0);
-    m_data.direction = glm::toMat3(m_parent->rotation) * glm::vec3(0,0,-1);
+    m_data.position = parent_transform * glm::vec4(0, 0, 0, 1);
+    m_data.direction = glm::toMat3(parent()->rotation) * glm::vec3(0,0,-1);
 
     renderer::instance()->add_light(m_data);   
 }
