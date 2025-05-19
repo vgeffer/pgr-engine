@@ -33,7 +33,10 @@ displacement::displacement(const std::string& path)
 
             vertices.emplace_back(
                 glm::vec3(static_cast<float>(x), static_cast<float>(m_heightmap[z * m_w  + x]) / DISPLACEMENT_HIEGHT_MODIFIER, 
-                static_cast<float>(z)), glm::vec3(0), glm::vec3(0), glm::vec3(0), glm::vec2(0)
+                static_cast<float>(z)), glm::vec3(0), glm::vec3(0), glm::vec3(0), glm::vec2( 
+                    static_cast<float>(x) / static_cast<float>(m_w) * 12.0f,
+                    static_cast<float>(z) / static_cast<float>(m_h) * 12.0f 
+                )
             ); 
         }
     }
