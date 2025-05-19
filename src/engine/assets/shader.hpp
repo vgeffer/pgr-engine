@@ -29,6 +29,19 @@ namespace assets {
             /// Destroys OpenGL shader objects and cleans used memory
             ~shader_stage();
     
+            template <typename Tp> 
+            void set_uniform(std::string uniform_name, const Tp& val) {
+            
+                GLint location;
+            
+                /* Get uniform location - if not found, skip*/
+                if ((location  = glGetUniformLocation(m_program, uniform_name.c_str())) < 0)
+                    return;
+            
+                m_set_uniform_value<Tp>(location, val);
+            }
+            
+
             /// @brief Getter for type bits of the shader
             inline GLbitfield type_bitmask() const { return m_type_bitmask; }
         
@@ -36,6 +49,10 @@ namespace assets {
             /// This operator allows using shader_stage's underlying OpenGL object directly in OpenGL calls
             /// It is made explicit for code clarity sake
             explicit operator GLuint() { return m_program; }
+
+        private:
+            template <typename T>
+            void m_set_uniform_value(GLint location, const T& val);
 
         private:
             GLbitfield m_type_bitmask;  ///< Shader type bitmask

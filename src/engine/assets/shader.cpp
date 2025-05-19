@@ -7,9 +7,13 @@
 #include <iostream>
 #include <fstream>
 
+#include <glm/glm.hpp>
+#include <glm/gtc/type_ptr.hpp>
+
 #include "shader.hpp"
 #include "../utils/buffer.hpp"
 
+using namespace glm;
 using namespace std;
 using namespace assets;
 
@@ -116,4 +120,58 @@ shader_stage::shader_stage(string path)
 shader_stage::~shader_stage() {
 
     glDeleteProgram(m_program);
+}
+
+/* Uniform setters - there is a lot of them*/
+template <> void shader_stage::m_set_uniform_value<int>(GLint location, const int& val) {
+    glProgramUniform1i(m_program, location, val);
+}
+
+template <> void shader_stage::m_set_uniform_value<uint>(GLint location, const uint& val) {
+    glProgramUniform1ui(m_program, location, val);
+}
+
+template <> void shader_stage::m_set_uniform_value<float>(GLint location, const float& val) {
+    glProgramUniform1f(m_program, location, val);
+}
+
+template <> void shader_stage::m_set_uniform_value<bool>(GLint location, const bool& val) {
+    glProgramUniform1i(m_program, location, val);
+}
+
+template <> void shader_stage::m_set_uniform_value<ivec2>(GLint location, const ivec2& val) { 
+    glProgramUniform2iv(m_program, location, 1, value_ptr(val)); 
+}
+
+template <> void shader_stage::m_set_uniform_value<vec2>(GLint location, const vec2& val) {
+    glProgramUniform2fv(m_program, location, 1, value_ptr(val));
+}
+
+template <> void shader_stage::m_set_uniform_value<mat2x2>(GLint location, const mat2x2& val) {
+    glProgramUniformMatrix2fv(m_program, location, 1, GL_FALSE, value_ptr(val));
+}
+
+template <> void shader_stage::m_set_uniform_value<ivec3>(GLint location, const ivec3& val) {
+    glProgramUniform3iv(m_program, location, 1,  value_ptr(val));
+}
+
+template <> void shader_stage::m_set_uniform_value<vec3>(GLint location, const vec3& val) {
+    glProgramUniform3fv(m_program, location, 1,  value_ptr(val));
+}
+
+template <> void shader_stage::m_set_uniform_value<mat3x3>(GLint location, const mat3x3& val) {
+
+    glProgramUniformMatrix3fv(m_program, location, 1, GL_FALSE, value_ptr(val));
+}
+
+template <> void shader_stage::m_set_uniform_value<ivec4>(GLint location, const ivec4& val) {
+    glProgramUniform2iv(m_program, location, 1, value_ptr(val));
+}
+
+template <> void shader_stage::m_set_uniform_value<vec4>(GLint location, const vec4& val) {
+    glProgramUniform4fv(m_program, location, 1, value_ptr(val));
+}
+
+template <> void shader_stage::m_set_uniform_value<mat4x4>(GLint location, const mat4x4& val) {
+    glProgramUniformMatrix4fv(m_program, location, 1, GL_FALSE, value_ptr(val));
 }
