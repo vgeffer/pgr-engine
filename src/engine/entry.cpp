@@ -2,18 +2,15 @@
 /// @file entry.cpp
 /// @author geffevil
 ///
-
 #include "engine_app.hpp"
 #include <string>
-#include <string_view>
+
 
 #define PARSE_ARG(name, type, var) \
     if (std::string_view(argv[arg]) == name && arg < argc - 1) \
         var = type(argv[++arg]);    
     
-/// @brief Entry point
-///
-/// Main function
+/// @brief Entry point of the application
 int main(int argc, char** argv) {    
 
     /* Defaults */
