@@ -3,12 +3,12 @@
 #include <glm/ext/matrix_float4x4.hpp>
 #include <glm/ext/matrix_transform.hpp>
 #include <glm/fwd.hpp>
+#include <iostream>
 #include <stdexcept>
 #include <unordered_map>
 #include <vector>
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtx/quaternion.hpp>
-#include "../utils/logger.hpp"
 
 using namespace std;
 using namespace glm;
@@ -25,7 +25,7 @@ scene_node::scene_node(const string& name, scene_node::node_type type)
 
 scene_node::scene_node(const resource& res)
     : m_name(res.deserialize<std::string>("name")), m_parent(nullptr), m_enabled(true), m_visible(true), 
-      m_in_scene(false), m_type(node_type::GENERIC) {
+      m_in_scene(false), m_type(scene_node::node_type::GENERIC) {
 
     position = res.deserialize<vec3>("position", vec3(0, 0, 0));
     rotation = res.deserialize<quat>("rotation", quat(0, 0, 0, 0));
@@ -37,7 +37,7 @@ scene_node::scene_node(const resource& res)
 
         auto spawner = _internal::component_registry::registered_components.find(name);
         if (spawner == _internal::component_registry::registered_components.end()) {
-            logger::warn << "Unknown component " << name << "! Skipping..." << std::endl;     
+            std::cerr << "[WARNING] Unknown component " << name << "! Skipping..." << std::endl;     
             continue;
         }
 
@@ -93,23 +93,23 @@ void scene_node::prepare_draw(const glm::mat4x4& parent_transform) {
     
     /* Prepare components */
     for (auto& [id, component] : m_components.get_all()) 
-        component->prepare_draw(model_mat() * parent_transform);
+        component->prepare_draw(parent_transform * model_mat());
 
     /* Process children */
     for (auto [name, child] : m_children)
-        child->prepare_draw(model_mat() * parent_transform);
+        child->prepare_draw(parent_transform * model_mat());
 }
 
 void scene_node::add_child(scene_node* node) {
 
     /* Check for invalid nodes */
     if (node == nullptr || node->m_type == node_type::ROOT) {
-        logger::error << "NULL node or ROOT node provided, will not be inserted as child!" << std::endl;
+        std::cerr << "[ERROR] NULL node or ROOT node provided, will not be inserted as child!" << std::endl;
         return;
     }
 
     if (m_children.find(node->m_name) != m_children.end()) {
-        logger::error << "Duplicate node " << node->m_name << "! Will not be inserted as child!" << std::endl;
+        std::cerr << "[WARNING] Duplicate node " << node->m_name << "! Will not be inserted as child!" << std::endl;
     }
 
     m_children.emplace(node->m_name, node);
@@ -126,11 +126,26 @@ void scene_node::add_child(scene_node* node) {
 
 scene_node* scene_node::child(const string& name) const {
 
-    /// @todo: [Mid-Term]: Update to use the resource system for paths in scene
-    if (auto iter = m_children.find(name); iter != m_children.end())
-        return iter->second;
+    vector<string> path_components = utils::split(name, "/");
+    if (path_components.empty())
+        throw std::logic_error("Invalid path provided, child " + name + " not found!");
 
-    throw runtime_error("Child index out of bounds");
+    /* First one needs to be explicitly checked*/
+    auto child_iter = m_children.find(path_components[0]);
+    if (child_iter == m_children.cend())
+        throw std::logic_error("Invalid path provided, child " + name + " not found!");
+        
+    auto child = child_iter->second;
+    for (size_t i = 1; i < path_components.size(); i++) {
+                 
+        auto iter = child->m_children.find(path_components[i]); 
+        if(iter == child->m_children.end())
+            throw std::logic_error("Invalid path provided, child " + name + " not found!");
+
+        child = iter->second;
+    }
+
+    return child;
 }
 
 mat4x4 scene_node::model_mat() const {
@@ -139,6 +154,24 @@ mat4x4 scene_node::model_mat() const {
         translate(identity<mat4x4>(), position) * toMat4(rotation),
         scale
     );
+}
+
+bool scene_node::visible(bool v) {
+
+    if (v == m_visible)
+        return m_visible;
+
+    m_visible = v;
+
+    /* Tell all the components that visibility changed */
+    for (auto& [id, component] : m_components.get_all()) 
+        component->visibility_changed();
+
+    /* Process children */
+    for (auto [name, child] : m_children)
+        child->visible(v);
+
+    return m_visible;
 }
 
 void scene_node::m_on_scene_enter() {

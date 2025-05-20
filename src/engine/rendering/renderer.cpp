@@ -1,468 +1,608 @@
 #include "renderer.hpp"
-#include "../utils/project_settings.hpp"
-#include "../runtime.hpp"
-#include "mesh.hpp"
-#include <GL/gl.h>
-#include <glm/ext/matrix_float4x4.hpp>
-#include <glm/ext/scalar_constants.hpp>
-#include <glm/fwd.hpp>
-#include <memory>
+
+#include <glm/detail/qualifier.hpp>
 #include <stdexcept>
 #include <utility>
-#include <vector>
+#include <glm/glm.hpp>
 #include <glm/gtc/type_ptr.hpp>
-#define GLM_ENABLE_EXPERIMENTAL
-#include <glm/gtx/norm.hpp>
+
+#include "camera.hpp"
+#include "mesh.hpp"
+#include "meshes/quad.hpp"
+#include "meshes/skybox.hpp"
+#include "../utils/project_settings.hpp"
+#include "../runtime.hpp"
+#include "../assets/loader.hpp"
 
 using namespace std;
 using namespace glm;
-using namespace nodes;
 using namespace utils;
 using namespace assets;
 using namespace rendering;
 
-/* Constants */
-const GLint CAMERA_UBO_BINDING = 0;
-const GLint MATERIAL_UBO_BINDING = 1;
+/// @brief list of active attachments for opaque passes 
+constexpr std::array<GLenum, 1> g_opaque_attachments = { GL_COLOR_ATTACHMENT0 };
 
-renderer::renderer() {
+/// @brief list of active attachments for OIT
+constexpr std::array<GLenum, 2> g_transparent_attachments = { GL_COLOR_ATTACHMENT1, GL_COLOR_ATTACHMENT2 };
 
-    if (_instance != nullptr)
+renderer::renderer() 
+    : m_vertex_buffer(gpu_allocator(project_settings::gpu_geometry_buffer_alloc_size())), 
+      m_element_buffer(gpu_allocator(project_settings::gpu_geometry_buffer_alloc_size())),
+      m_material_buffer(gpu_allocator(project_settings::gpu_material_buffer_alloc_size())),
+      m_texture_buffer(gpu_allocator(project_settings::gpu_textures_buffer_alloc_size())) { }
+
+void renderer::init() {
+
+    if (s_instance != nullptr)
         throw logic_error("Renderer already initialised");
     
     for (GLenum capability : project_settings::gl_global_capabilities())
         glEnable(capability);
-    
+
     /* Setup backface culling - this is constant */
+    glEnable(GL_DEPTH_TEST);
+    glEnable(GL_CULL_FACE);
     glCullFace(GL_BACK);
     glFrontFace(GL_CCW);
-    glDepthFunc(GL_LESS);
-    glClearColor(0.3f, 0.3f, 0.3f, 1.0f);
 
-    _instance = this;
-    glGenProgramPipelines(1, &_gl_pipeline); /* TODO: mayybe multiple pipelines? */
+    s_instance = this;
+    glGenProgramPipelines(1, &m_pipeline);
 
-    /* Get texturing info */
-    glGetIntegerv(GL_MAX_TEXTURE_IMAGE_UNITS, &_max_textures);
+    /* Setup quad */
+    auto [q_handle, q_offset] = m_vertex_buffer.alloc_buffer(sizeof(c_quad_mesh));
+    m_vertex_buffer.buffer_data(q_handle, sizeof(c_quad_mesh), c_quad_mesh.data());
+    m_quad_handle = q_handle;
+    m_quad_first_vertex = q_offset / sizeof(mesh::vertex);
 
-    /* Generate quad for postprocess */
-    const vector<vec2> pp_quad_verts = {
-        vec2(-1, 1),
-        vec2(-1, -1),
-        vec2 (1, 1),
-        vec2(1, -1)
-    };
+    /* Setup skybox mesh */
+    auto [s_handle, s_offset] = m_vertex_buffer.alloc_buffer(sizeof(c_skybox_mesh));
+    m_vertex_buffer.buffer_data(s_handle, sizeof(c_skybox_mesh), c_skybox_mesh.data());
+    m_skybox_handle = s_handle;
+    m_skybox_first_vertex = s_offset / sizeof(mesh::vertex);
 
-    /* Load shader */
-    _pp_vertex_stage = asset::load<shader_stage>("shaders/postprocess.vert", asset::caching_policy::KEEPALIVE);
+    /* Load shaders */
+    m_quad_vertex_shader = loader::load<shader_stage>("shaders/quad.vert");
+    m_combination_shader = loader::load<shader_stage>("shaders/combination.frag");
+    m_skybox_vertex_shader = loader::load<shader_stage>("shaders/skybox.vert");
+    m_skybox_fragment_shader = loader::load<shader_stage>("shaders/skybox.frag");
+    
 
-    /* Create objects */
-    glGenVertexArrays(1, &_pp_quad_vao);
-    glGenBuffers(1, &_pp_quad_vbo);
+    for (const auto& stage_path : project_settings::default_shaders()) {
 
-    /* Assign to OGL objects */
-    glBindVertexArray(_pp_quad_vao);
-       
-    /* Vertices */
-    glBindBuffer(GL_ARRAY_BUFFER, _pp_quad_vbo);
-    glBufferData(
-        GL_ARRAY_BUFFER, 
-        pp_quad_verts.size() * sizeof(pp_quad_verts[0]), 
-        pp_quad_verts.data(), 
-        GL_STATIC_DRAW
-    );
+        std::shared_ptr<shader_stage> stage = loader::load<shader_stage>(stage_path);
+        if (m_default_shaders.find(stage->type_bitmask()) != m_default_shaders.end()) {
+            std::cerr << "[WARNING] A shader type " << stage->type_bitmask() << " already has a shader attached! Skipping " << stage_path << std::endl;
+            continue;
+        }
+    
+        m_default_shaders.emplace(stage->type_bitmask(), stage);
+    }
 
+    /* Create FBOs */
+    m_build_fbos();
 
-    glVertexAttribPointer(_pp_vertex_stage->attribute_location("vertex"), 2, GL_FLOAT, false, 0, 0);
-    glEnableVertexAttribArray(_pp_vertex_stage->attribute_location("vertex"));
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);   
+    /* Create model vao with ebo */
+    glCreateVertexArrays(1, &m_models_vao);
+
+    /* Bind EBO and VBO */
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, VERTEX_SSBO, m_vertex_buffer.buffer());
+    glVertexArrayElementBuffer(m_models_vao, m_element_buffer.buffer());
+
+    /* Bind Texture and Model budder */
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, MATERIAL_SSBO, m_material_buffer.buffer());
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, TEXTURE_SSBO, m_texture_buffer.buffer());
+
+    /* Create Draw command queue */
+    glCreateBuffers(1, &m_draw_cmd_queue);
+
+    /* Create dynamic object data storage */
+    glCreateBuffers(1, &m_object_storage);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, OBJECT_SSBO, m_object_storage);
+
+    /* Create light buffer */
+    glCreateBuffers(1, &m_light_storage);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, LIGHTS_SSBO, m_light_storage);
+
+    /* Clear the screen */
+    glClearColor(0, 0, 0, 1);
 }
 
 renderer::~renderer() {
 
-    for (auto& stage : _attached_shader_stages)
-        glUseProgramStages(_gl_pipeline, stage->type_bitmask(), 0);
+    for (auto& [type, stage] : m_attached_shader_stages)
+        glUseProgramStages(m_pipeline, type, 0);
 
-    glDeleteProgramPipelines(1, &_gl_pipeline);
+    glDeleteProgramPipelines(1, &m_pipeline);
 
-    /* Delete postprocess passes */
-    for (size_t i = 0; i < _pp_passes.size(); i++)
-        remove_postprocess_pass(i);
+    m_vertex_buffer.free_buffer(m_quad_handle);
+    m_vertex_buffer.free_buffer(m_skybox_handle);
 
-    glDeleteBuffers(1, &_pp_quad_vbo);
-    glDeleteVertexArrays(1, &_pp_quad_vao);
+    /* Destroy FBOs */
+    m_destroy_fbos();
+
+    /* Delete instance data */
+    s_instance = nullptr; 
 }
 
-size_t renderer::add_postprocess_pass(shader_stage* shader, bool append) {
+renderer::pp_pass_handle renderer::add_postprocess_pass(const shared_ptr<shader_stage>& shader) {
 
     if (shader->type_bitmask() != GL_FRAGMENT_SHADER_BIT)
         throw logic_error("Provided shader is not a fragment shader!");
 
-    win_props_t props = engine_runtime::instance()->window().props();
-
-    postprocess_pass_t pp = {};
-    glGenFramebuffers(1, &pp.pp_fbo);
-
-    glBindFramebuffer(GL_FRAMEBUFFER, pp.pp_fbo);
-    if (shader->uniform_location("screen_texture") >= 0) {
-
-        /* Screen texture is used, create it as texture*/
-        pp.pp_use_color_tex = true;
-        glGenTextures(1, &pp.pp_color_buffer);
-        glBindTexture(GL_TEXTURE_2D, pp.pp_color_buffer);
-
-        glTexImage2D(
-            GL_TEXTURE_2D, 
-            0, GL_RGB, 
-            props.current_mode.w, 
-            props.current_mode.h, 
-            0, GL_RGB, 
-            GL_UNSIGNED_BYTE, NULL
-        );
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, project_settings::tex_min_filter());
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, project_settings::tex_mag_filter());
-        glBindTexture(GL_TEXTURE_2D, 0);
-
-        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, pp.pp_color_buffer, 0);
-    }
-    else {
-
-        /* Screen texture is not used, create it as RBO */
-        pp.pp_use_color_tex = false;
-        glGenRenderbuffers(1, &pp.pp_color_buffer);
-        glBindRenderbuffer(GL_RENDERBUFFER, pp.pp_color_buffer);
-        glRenderbufferStorage(
-            GL_RENDERBUFFER, 
-            GL_RGB,
-            props.current_mode.w, 
-            props.current_mode.h
-        );
-
-        glBindRenderbuffer(GL_RENDERBUFFER, 0);
-        glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, pp.pp_color_buffer);
-    }
-
-    if (shader->uniform_location("screen_texture") >= 0) {
-
-        /* Depth texture is used, create it as texture*/
-        pp.pp_use_depth_tex = true;
-        glGenTextures(1, &pp.pp_depth_buffer);
-        glBindTexture(GL_TEXTURE_2D, pp.pp_depth_buffer);
-
-        glTexImage2D(
-            GL_TEXTURE_2D, 
-            0, GL_DEPTH24_STENCIL8, 
-            props.current_mode.w, 
-            props.current_mode.h, 
-            0, GL_DEPTH_STENCIL, 
-            GL_UNSIGNED_INT_24_8, NULL
-        );
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, project_settings::tex_min_filter());
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, project_settings::tex_mag_filter());
-        glBindTexture(GL_TEXTURE_2D, 0);
-
-        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_TEXTURE_2D, pp.pp_depth_buffer, 0);
-    }
-    else {
-
-        /* Depth texture is not used, create it as RBO */
-        pp.pp_use_depth_tex = false;
-        glGenRenderbuffers(1, &pp.pp_depth_buffer);
-        glBindRenderbuffer(GL_RENDERBUFFER, pp.pp_depth_buffer);
-        glRenderbufferStorage(
-            GL_RENDERBUFFER, 
-            GL_DEPTH24_STENCIL8,
-            props.current_mode.w, 
-            props.current_mode.h
-        );
-
-        glBindRenderbuffer(GL_RENDERBUFFER, 0);
-        glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, pp.pp_depth_buffer);
-    }
-
-    /* Check if framebuffer is complete */
-    if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
-        throw runtime_error("Framebuffer not complete yet!");
-
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
-
-    if (append) {
-        
-        _pp_passes.push_back(pp);
-        return _pp_passes.size() - 1;
-    }
-
-    _pp_passes.insert(_pp_passes.begin(), pp);
-    return 0;
+    return m_postprocess_passes.emplace(m_postprocess_passes.end(), shader);
 }
 
-void renderer::remove_postprocess_pass(size_t index) {
+void renderer::remove_postprocess_pass(const renderer::pp_pass_handle& index) {
 
-    if (index < 0 || index >= _pp_passes.size())
-        throw runtime_error("Index out of range!");
+    if (index == m_postprocess_passes.end()) {
+        std::cerr << "[ERROR] Attempting to delete an unknown postprocessing pass" << std::endl;
+        return;
+    }
 
-    postprocess_pass_t pp = _pp_passes[index];
-    _pp_passes.erase(_pp_passes.begin() + index);
-    
-    /* Frame buffer */
-    glDeleteFramebuffers(1, &pp.pp_fbo);
-    
-    /* Color buffer */
-    if (pp.pp_use_color_tex) glDeleteTextures(1, &pp.pp_color_buffer);
-    else glDeleteRenderbuffers(1, &pp.pp_color_buffer);
-
-    /* Depth buffer */
-    if (pp.pp_use_depth_tex) glDeleteTextures(1, &pp.pp_depth_buffer);
-    else glDeleteRenderbuffers(1, &pp.pp_depth_buffer);
+    m_postprocess_passes.erase(index);
 }
 
-void renderer::insert_mesh(observer_ptr<mesh_instance>&& mesh) {
+void renderer::set_active_camera(const utils::observer_ptr<camera>& camera) {
 
-    _draw_list.emplace_back(mesh);
+    if (!camera.valid() || m_active_camera == camera)
+        return;
+
+    m_active_camera = camera;
+    glBindBufferBase(GL_UNIFORM_BUFFER, CAMERA_UBO, camera->camera_data());
+} 
+
+void renderer::set_active_skybox(const std::shared_ptr<assets::cubemap>& skybox) {
+
+    m_current_skybox = skybox;
+    glBindTexture(GL_TEXTURE_CUBE_MAP, skybox->cubemap_object());
+}
+
+void renderer::request_draw(const observer_ptr<mesh_instance>& mesh_instance, const glm::mat4x4& transform) {
+
+    /* If mesh is invalid, there is no point in drawing it */
+    if (!mesh_instance.valid())
+        return;
+
+    /* Create draw request */
+    draw_request req = {
+        draw_request::draw_command{
+            mesh_instance->get_mesh()->element_count(),
+            1, /* No instancing RN */
+            mesh_instance->get_mesh()->first_index(),
+            static_cast<int>(mesh_instance->get_mesh()->first_vertex()),
+            0 /* No instancing RN */
+        },
+        draw_request::object_data{
+            transform,
+            glm::transpose(glm::inverse(transform)),
+            mesh_instance->get_material().uv_mat(),
+            mesh_instance->get_material().material_index()
+        },
+        mesh_instance->get_material().transparent(),
+        mesh_instance->get_material().shader_stages()  
+    };
+
+    /* Insert into list */
+    m_enqueued_objects.insert(std::move(req), 
+        static_cast<GLuint>(*mesh_instance->get_material().shader_stages().at(shader_stage::c_known_stage_types[1])), 
+        static_cast<GLuint>(*mesh_instance->get_material().shader_stages().at(shader_stage::c_known_stage_types[1]))
+    );
 }
 
 /* This... this is gonna be a big one */
-void renderer::draw_scene(camera& camera) {
+void renderer::draw_scene() {
 
-    /* Main camera && Postprocess is enabled */
-    if (!_pp_passes.empty())
-        glBindFramebuffer(GL_FRAMEBUFFER, _pp_passes[0].pp_fbo); /* Bind FBO */
-    
-    /* TODO: Render textures */
-    
-    /* Clear buffer */
-    glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
+    //===============================
+    // SETUP - Prepare rendering
+    //===============================
+
+    /* No valid camera bound or nothing to draw, end the draw function */
+    if (!m_active_camera.valid() || m_enqueued_objects.empty())
+        return;
 
     /* Update view matrix uniform */
-    glBindBuffer(GL_UNIFORM_BUFFER, camera.matrix_buffer());
-    glBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(mat4x4), value_ptr(camera.view()));
-    glBindBuffer(GL_UNIFORM_BUFFER, 0);
-    
-    /* Bind camera's matrix to the correct UBO  - optimize binding */
-    glBindBufferBase(GL_UNIFORM_BUFFER, CAMERA_UBO_BINDING, camera.matrix_buffer());
+    glNamedBufferSubData(
+        m_active_camera->camera_data(), 
+        sizeof(mat4x4), sizeof(mat4x4), 
+        glm::value_ptr(m_active_camera->view())
+    );
 
+    /* Prepare object data for drawing */
+    std::vector<render_pass> draw_passes;
+    m_prepare_drawing(draw_passes);
 
-    auto draw_iter = _draw_list.begin();
-    GLuint currently_bound_vao = -1;
+    /* Update light data  & prepare for drawing */
+    glNamedBufferData(m_light_storage, m_lights.size() * sizeof(m_lights[0]), m_lights.data(), GL_DYNAMIC_DRAW);
+    glBindProgramPipeline(m_pipeline);
+    glBindVertexArray(m_models_vao);
+    glBindBuffer(GL_DRAW_INDIRECT_BUFFER, m_draw_cmd_queue);
+ 
+    GLuint objects_drawn = 0;
+    auto pass = draw_passes.begin();
+
+    /* Clean the fbo's depth */
+    glClearNamedFramebufferfi(m_default_target.fbo, GL_DEPTH_STENCIL, 0, 1.0f, 0.0f);
 
     //===============================
     // PASS 1 - Opaque objects
     //===============================
-    glBindProgramPipeline(_gl_pipeline);
-    for (; draw_iter != _draw_list.end(); draw_iter++) {
 
-        /* Underlying object was already deleted, delete it */
-        auto to_draw = *draw_iter;
+    /* Bind default FBO */
+    glBindFramebuffer(GL_FRAMEBUFFER, m_default_target.fbo);
 
-        if (!to_draw.valid()) {
-            draw_iter = _draw_list.erase(draw_iter);
-            
-            /* If the item was last, end the list */
-            if (draw_iter == _draw_list.end())
-                break;
-        }
+    /* Enable only opaque attachment for drawing and clear it */
+    glNamedFramebufferDrawBuffers(m_default_target.fbo, g_opaque_attachments.size(), g_opaque_attachments.data());
+    glClearNamedFramebufferfv(m_default_target.fbo, GL_COLOR, 0, value_ptr(glm::vec4(0.0)));
 
-        /* Reached transparent objects, end the pass */
-        if (to_draw->mat->transparent())
-            break; 
+    /* Set appropriate OpenGL state */
+    glDepthMask(GL_TRUE);
+    glDepthFunc(GL_LESS);
+    glEnable(GL_BLEND);
+    glBlendFunci(0, GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-        /* Check if model is supposed to be drawn */
-        if (!to_draw->draw_enqueued())
-            continue; 
+    /* Itterate over draw passes and draw them */
+    for (; pass != draw_passes.end(); ++pass) {
+        
+        /* Upon reaching the first transparent pass, end this step */
+        if (pass->transparent)
+            break;
 
-        /* Bind up matrices & materials */
-        _set_uniform("mat_model", to_draw->model_mat());
-        to_draw->mat->use();
+        /* Bind shader delta */
+        for (const auto& stage : pass->shader_delta)
+            attach_stage(stage);
+
+        /* Set uniforms correctly - Only TWO (engine) uniforms per shader! */
+        set_uniform("draw_id_offset", objects_drawn, GL_VERTEX_SHADER_BIT);
+        set_uniform("light_count", static_cast<uint>(m_lights.size()), GL_FRAGMENT_SHADER_BIT);
+        set_uniform("global_time", engine_runtime::instance()->global_clock());
 
         /* Draw! */
-        const GLuint vao = to_draw->drawable->vao();
-        if (vao != currently_bound_vao)
-            glBindVertexArray((currently_bound_vao = vao));
+        glMultiDrawElementsIndirect(
+            GL_TRIANGLES, GL_UNSIGNED_INT, 
+            reinterpret_cast<void*>(objects_drawn * sizeof(draw_request::draw_command)), 
+            pass->object_count, 0
+        );
 
-        const GLuint mode = to_draw->drawable->mode();    
-        if (mode != GL_TRIANGLE_STRIP && mode != GL_TRIANGLE_FAN)
-            glDrawElements(mode, to_draw->drawable->element_count(), GL_UNSIGNED_INT, reinterpret_cast<void*>(0));
-        else glDrawArrays(mode, 0, to_draw->drawable->element_count());
-    } 
+        objects_drawn += pass->object_count;
+    }
 
     //===============================
     // PASS 2 - Transparent objects
     //===============================
-    if (draw_iter != _draw_list.cend()) /* OIT - No sorting neceseary, only check if an oit step needs to be performed */
-        ;
-    
-    for (; draw_iter != _draw_list.cend(); draw_iter++) {
-    
-        auto to_draw = *draw_iter;
-        
-        /* Underlying object was already deleted, delete it */
-        if (!to_draw.valid()) {
-            draw_iter = _draw_list.erase(draw_iter);
-            
-            /* If the item was last, end the list */
-            if (draw_iter == _draw_list.end())
-                break;
-        }
 
-        if (!to_draw->draw_enqueued())
-            continue;
+    /* Enable only transparent attachments for drawing and clear them */
+    glNamedFramebufferDrawBuffers(m_default_target.fbo, g_transparent_attachments.size(), g_transparent_attachments.data());
+    glClearNamedFramebufferfv(m_default_target.fbo, GL_COLOR, 0, value_ptr(glm::vec4(0.0)));
+    glClearNamedFramebufferfv(m_default_target.fbo, GL_COLOR, 1, value_ptr(glm::vec4(1.0))); 
 
-        /* Binding up */
-        _set_uniform("mat_model", to_draw->model_mat());
+    /* Set appropriate OpenGL state */
+    glDepthMask(GL_FALSE);
+    glBlendFunci(0, GL_ONE, GL_ONE);
+    glBlendFunci(1, GL_ZERO, GL_ONE_MINUS_SRC_COLOR);
+
+    /* Draw the rest of the passes */
+    for (; pass != draw_passes.end(); ++pass) {
+    
+        /* Bind shader delta */
+        for (const auto& stage : pass->shader_delta)
+            attach_stage(stage);
+
+        /* Set uniforms correctly - Only TWO (engine) uniforms per shader! */
+        set_uniform("draw_id_offset", objects_drawn, GL_VERTEX_SHADER_BIT);
+        set_uniform("light_count", static_cast<uint>(m_lights.size()), GL_FRAGMENT_SHADER_BIT);
+        set_uniform("global_time", engine_runtime::instance()->global_clock());
 
         /* Draw! */
-        const GLuint vao = to_draw->drawable->vao();
+        glMultiDrawElementsIndirect(
+            GL_TRIANGLES, GL_UNSIGNED_INT, 
+            reinterpret_cast<void*>(objects_drawn * sizeof(draw_request::draw_command)), 
+            pass->object_count, 0
+        );
 
-        if (vao != currently_bound_vao)
-            glBindVertexArray((currently_bound_vao = vao));
-
-        const GLuint mode = to_draw->drawable->mode();    
-        if (mode != GL_TRIANGLE_STRIP || mode != GL_TRIANGLE_FAN)
-            glDrawElements(mode, to_draw->drawable->element_count(), GL_UNSIGNED_INT, static_cast<void*>(0));
-        else glDrawArrays(mode, 0, to_draw->drawable->element_count());
+        objects_drawn += pass->object_count;
     }
 
     //===============================
-    // PASS 3 - Post-processing 
+    // INTERMEZZO - Skybox
     //===============================
-    if (!_pp_passes.empty()) {
-
-        size_t current_pass_idx = 0,
-            next_pass_idx = 1;
+    
+    /* Set opaque attachment up for drawing */
+    
+    glNamedFramebufferDrawBuffers(m_default_target.fbo, g_opaque_attachments.size(), g_opaque_attachments.data());
+    glDepthFunc(GL_LEQUAL);
+    
+    /* If the scene has skybox, draw it! */
+    if (m_current_skybox) {
         
-        _attach_stage(_pp_vertex_stage);
+        attach_stage(m_skybox_vertex_shader);
+        attach_stage(m_skybox_fragment_shader);
 
-        /* Bind Postprocess target -> quad*/
-        glBindVertexArray(_pp_quad_vao);
+        glDrawArraysInstancedBaseInstance(
+            GL_TRIANGLES, 
+            m_skybox_first_vertex, 
+            c_skybox_mesh.size(), 1, 0
+        );
+    }
 
-        while (true) {
+    //===============================
+    // PASS 3 - Blend pass
+    //===============================
 
-            if (_pp_passes.size() > next_pass_idx)
-                glBindFramebuffer(GL_FRAMEBUFFER, _pp_passes[next_pass_idx].pp_fbo);
-            else
-                glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    /* If no postprocess passes will follow, choose back buffer directly */
+    /* Otherwise, choose the postprocess FBO */
+    glBindFramebuffer(
+        GL_FRAMEBUFFER, 
+        m_postprocess_passes.size() > 0 ? m_postprocess_targets[0].fbo : 0
+    );
 
-            _attach_stage(_pp_passes[current_pass_idx].pp_shader);
-            if (_pp_passes[current_pass_idx].pp_use_color_tex) _set_texture("screen_texture", _pp_passes[current_pass_idx].pp_color_buffer);
-            if (_pp_passes[current_pass_idx].pp_use_depth_tex) _set_texture("depth_texture", _pp_passes[current_pass_idx].pp_depth_buffer);
+    glDepthMask(GL_TRUE);
+    glDepthFunc(GL_ALWAYS);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-            /* Draw */
-            glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+    /* If no object nor skybox were drawn, end the frame now */
+    if (objects_drawn == 0 && !m_current_skybox) {
+        m_end_draw();
+        return;
+    }
+    
+    /* Attach default FBO's attachments as textures */
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, m_default_target.opaque_target);   
+    glActiveTexture(GL_TEXTURE1);
+    glBindTexture(GL_TEXTURE_2D, m_default_target.accum_target);
+    glActiveTexture(GL_TEXTURE2);
+    glBindTexture(GL_TEXTURE_2D, m_default_target.reveal_target);
+    
+    /* Setup shaders */
+    attach_stage(m_quad_vertex_shader);
+    attach_stage(m_combination_shader);
+    
+    /* Set uniforms */
+    set_uniform("opaque_target", 0);
+    set_uniform("accum_target", 1);
+    set_uniform("reveal_target", 2);
+    
+    /* Draw! */
+    glDrawArraysInstancedBaseInstance(
+        GL_TRIANGLES, 
+        m_quad_first_vertex, 
+        c_quad_mesh.size(), 1, 0
+    );
+    
+    //===============================
+    // PASS 4 - Post-processing
+    //===============================
 
-            /* Last pass was rendered, end */
-            if (_pp_passes.size() >= next_pass_idx)
+    /* Definitions of "front" and "back" buffers - allows having just two buffers for the */
+    /* entirety of postprocessing */
+    GLuint front = 0, 
+           back = 1;
+
+    for (auto pp_pass = m_postprocess_passes.begin(); pp_pass != m_postprocess_passes.end(); ++pp_pass) {
+
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, m_postprocess_targets[0].color_target);   
+        glActiveTexture(GL_TEXTURE1);
+        glBindTexture(GL_TEXTURE_2D, m_default_target.depth_stencil_target);
+        glTexParameteri(GL_TEXTURE_2D, GL_DEPTH_STENCIL_TEXTURE_MODE, GL_DEPTH_COMPONENT);
+
+
+        /* Setup shaders */
+        attach_stage(*pp_pass);
+        
+        /* Set uniforms */
+        set_uniform("color_target", 0);
+        set_uniform("depth_target", 1);
+        
+        /* If this is the last postprocessing pass, bind back buffer */
+        glBindFramebuffer(
+            GL_FRAMEBUFFER, 
+            utils::is_last_in_container(m_postprocess_passes, pp_pass) ? 0 : m_postprocess_targets[0].fbo
+        );
+        
+        /* Draw! */
+        glDrawArraysInstancedBaseInstance(
+            GL_TRIANGLES, 
+            m_quad_first_vertex, 
+            c_quad_mesh.size(), 1, 0
+        );
+        
+        /* Swap buffers */
+        front = back;
+        back ^= 1;
+    }
+
+    //===============================
+    // END - next-frame preparation
+    //===============================
+    m_end_draw();
+}
+
+template <typename T> 
+void renderer::set_uniform(std::string uniform_name, const T& val, GLbitfield stage_hint) {
+
+    for (auto [type, stage] : m_attached_shader_stages) {
+        
+        /* Check if type is being masked by a hint */
+        if (!(type & stage_hint))
+            continue;
+
+        stage->set_uniform<T>(uniform_name, val);
+    }
+}
+
+void renderer::attach_stage(const shared_ptr<shader_stage>& stage) {
+    
+    m_attached_shader_stages[stage->type_bitmask()] = stage;
+    glUseProgramStages(m_pipeline, stage->type_bitmask(), static_cast<GLuint>(*stage));
+}
+
+void renderer::m_prepare_drawing(vector<render_pass>& draw_passes) {
+
+    /* Create command queues */
+    vector<draw_request::draw_command> commands;
+    vector<draw_request::object_data> object_data;
+
+    /* Split objects to opaque and transparent */
+    auto first_transparent = stable_partition(
+        m_enqueued_objects.begin(), m_enqueued_objects.end(), 
+        [](draw_request req) { return !req.transparent; }
+    );
+
+    /* Currently bound shaders */
+    shader_map current_shaders;
+    bool is_transparent = false;
+    
+    /* This waay before than the code before */
+    auto object = m_enqueued_objects.begin();
+    while (object != m_enqueued_objects.end()) {
+        
+        /* Prepare new pass */
+        GLuint objects_in_pass = 0;
+        shader_list shader_delta;
+
+        /* Prepare space for shaders - by default vert and frag */
+        draw_passes.reserve(2); 
+        
+        /* Process shader delta */
+        for (const auto& [type, stage] : object->used_stages) {
+
+            if (auto iter = current_shaders.find(type); iter == current_shaders.end() || iter->second != stage) {
+                current_shaders[type] = stage;
+                shader_delta.push_back(stage);
+            }
+        }
+
+        /* Process objects */
+        for (; object != m_enqueued_objects.end(); ++object) {
+
+            /* Transparent passes start */
+            if (!is_transparent && object == first_transparent) 
                 break;
-            
-            current_pass_idx = next_pass_idx;
-            next_pass_idx++;
+
+            /* Shader missmatch */
+            if (m_has_shader_missmatch(object->used_stages, current_shaders))
+                break;
+
+            for (const auto& [key, stage] : object->used_stages) {
+                if (auto iter = current_shaders.find(key); iter == current_shaders.end() || iter->second != stage)
+                    break;
+            }
+
+            /* Push data to queues */
+            commands.push_back(std::move(object->command));
+            object_data.push_back(std::move(object->data));
+            objects_in_pass++;
         }
 
-        /* Unbind quad */
-        glBindVertexArray(0);
+        /* Save pass */
+        if (objects_in_pass > 0)
+            draw_passes.emplace_back(render_pass{is_transparent, objects_in_pass, shader_delta});
+
+        if (object == first_transparent)
+            is_transparent = true;
+    }
+
+    glNamedBufferData(m_draw_cmd_queue, commands.size() * sizeof(commands[0]), commands.data(), GL_DYNAMIC_DRAW);
+    glNamedBufferData(m_object_storage, object_data.size() * sizeof(object_data[0]), object_data.data(), GL_DYNAMIC_DRAW);
+}
+
+bool renderer::m_has_shader_missmatch(const shader_map& a, const shader_map& b) {
+
+    for (const auto& [type, stage] : a) {
+
+        if (auto iter = b.find(type); iter == b.end() || iter->second != stage)
+            return true;
+    }
+
+    return false;
+}
+
+void renderer::m_end_draw() {
+    glBindBuffer(GL_DRAW_INDIRECT_BUFFER, 0);
+    glBindVertexArray(0);
+    glBindProgramPipeline(0);
+
+    size_t last_frame_lights = m_lights.size();
+    m_lights.clear();
+    m_lights.reserve(last_frame_lights);
+    m_enqueued_objects.clear();
+}
+
+void renderer::m_build_fbos() {
+
+    const game_window::window_props_t& props = engine_runtime::instance()->window().props();
+
+    /* Opaque attachment */
+    glCreateTextures(GL_TEXTURE_2D, 1, &m_default_target.opaque_target);
+    glTextureParameteri(m_default_target.opaque_target, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTextureParameteri(m_default_target.opaque_target, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTextureStorage2D(
+        m_default_target.opaque_target, 1, GL_RGBA8, 
+        props.current_mode.size().x, props.current_mode.size().y
+    );
+
+    /* Accum attachment */
+    glCreateTextures(GL_TEXTURE_2D, 1, &m_default_target.accum_target);
+    glTextureParameteri(m_default_target.accum_target, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTextureParameteri(m_default_target.accum_target, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTextureStorage2D(
+        m_default_target.accum_target, 1, GL_RGBA16F, 
+        props.current_mode.size().x, props.current_mode.size().y
+    );
+
+    /* Reveal attachment */
+    glCreateTextures(GL_TEXTURE_2D, 1, &m_default_target.reveal_target);
+    glTextureParameteri(m_default_target.reveal_target, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTextureParameteri(m_default_target.reveal_target, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTextureStorage2D(
+        m_default_target.reveal_target, 1, GL_R8, 
+        props.current_mode.size().x, props.current_mode.size().y
+    );
+
+    /* Depth attachment */
+    glCreateTextures(GL_TEXTURE_2D, 1, &m_default_target.depth_stencil_target);
+    glTextureStorage2D(
+        m_default_target.depth_stencil_target, 1, GL_DEPTH24_STENCIL8, 
+        props.current_mode.size().x, props.current_mode.size().y
+    );
+
+    /* Bind attachments together */
+    glCreateFramebuffers(1, &m_default_target.fbo);
+    glNamedFramebufferTexture(m_default_target.fbo, GL_COLOR_ATTACHMENT0, m_default_target.opaque_target, 0);
+    glNamedFramebufferTexture(m_default_target.fbo, GL_COLOR_ATTACHMENT1, m_default_target.accum_target, 0);
+    glNamedFramebufferTexture(m_default_target.fbo, GL_COLOR_ATTACHMENT2, m_default_target.reveal_target, 0);
+    glNamedFramebufferTexture(m_default_target.fbo, GL_DEPTH_STENCIL_ATTACHMENT, m_default_target.depth_stencil_target, 0);
+
+    for (auto& pp_target : m_postprocess_targets) {
+
+        glCreateTextures(GL_TEXTURE_2D, 1, &pp_target.color_target);
+        glTextureParameteri(pp_target.color_target, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTextureParameteri(pp_target.color_target, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glTextureStorage2D(
+            pp_target.color_target, 1, GL_RGBA8, 
+            props.current_mode.size().x, props.current_mode.size().y
+        );    
+
+        glCreateFramebuffers(1, &pp_target.fbo);
+        glNamedFramebufferTexture(pp_target.fbo, GL_COLOR_ATTACHMENT0, pp_target.color_target, 0);
+        glNamedFramebufferDrawBuffer(pp_target.fbo, GL_COLOR_ATTACHMENT0);
     }
 }
 
-vector<pair<GLuint, GLint>> renderer::attribute_location(string name) const {
+void renderer::m_destroy_fbos() {
 
-    vector<pair<GLuint, GLint>> found_locations;
 
-    for (auto& stage : _attached_shader_stages) {
+    glDeleteFramebuffers(1, &m_default_target.fbo);
+    glDeleteTextures(1, &m_default_target.opaque_target);
+    glDeleteTextures(1, &m_default_target.accum_target);
+    glDeleteTextures(1, &m_default_target.reveal_target);
+    glDeleteTextures(1, &m_default_target.depth_stencil_target);
 
-        GLint location;
-        if ((location = stage->attribute_location(name)) >= 0)
-            found_locations.push_back(make_pair(*stage, location));
+    for (auto& pp_target : m_postprocess_targets) {
+
+        glDeleteFramebuffers(1, &pp_target.fbo);
+        glDeleteTextures(1, &pp_target.color_target);
     }
-
-    return found_locations;
-}
-
-vector<pair<GLuint, GLint>> renderer::uniform_location(string name) const {
-
-    vector<pair<GLuint, GLint>> found_locations;
-
-    for (auto& stage : _attached_shader_stages) {
-
-        GLint location;
-        if ((location = stage->uniform_location(name)) >= 0)
-            found_locations.push_back(make_pair(*stage, location));
-    }
-
-    return found_locations;
-}
-
-void renderer::_attach_stage(shared_ptr<shader_stage>& stage) {
-
-    for (size_t i = 0; i < _attached_shader_stages.size(); i++) {
-
-        /* Stage exists, replace */
-        if (_attached_shader_stages[i]->type_bitmask() == stage->type_bitmask()) {
-            _attached_shader_stages[i] = stage;
-            glUseProgramStages(_gl_pipeline, stage->type_bitmask(), *stage);
-            return;
-        }
-    }
-
-    /* Stage does not exist, add */
-    _attached_shader_stages.push_back(stage);
-    glUseProgramStages(_gl_pipeline, stage->type_bitmask(), *stage);
-}
-
-void _set_texture(std::string texture_name, std::shared_ptr<assets::texture> texture) {
-
-}
-
-void renderer::set_uniform(std::string uniform_name, const int& val) {
-
-    auto found_locations = uniform_location(uniform_name);
-    if (found_locations.size() <= 0)
-        return;
-
-    for (auto [program, location] : found_locations)
-        glProgramUniform1i(
-            program, location, 
-            val
-        );
-}
-
-template <float>
-void renderer::set_uniform(std::string uniform_name, const float& val) {
-
-    auto found_locations = uniform_location(uniform_name);
-    if (found_locations.size() <= 0)
-        return;
-
-    for (auto [program, location] : found_locations)
-        glProgramUniform1i(
-            program, location, 
-            val
-        );
-}
-
-void renderer::_set_uniform(std::string uniform_name, const glm::mat3x3& mat) {
-
-    auto found_locations = uniform_location(uniform_name);
-    if (found_locations.size() <= 0)
-        return;
-
-    for (auto [program, location] : found_locations)
-        glProgramUniformMatrix3fv(
-            program, location, 
-            1, GL_FALSE, 
-            glm::value_ptr(mat)
-        );
-}
-
-void renderer::_set_uniform(std::string uniform_name, const glm::mat4x4& mat) {
-
-    auto found_locations = uniform_location(uniform_name);
-    if (found_locations.size() <= 0)
-        return;
-
-    for (auto [program, location] : found_locations)
-        glProgramUniformMatrix4fv(
-            program, location, 
-            1, GL_FALSE, 
-            glm::value_ptr(mat)
-        );
 }

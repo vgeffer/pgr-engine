@@ -1,3 +1,7 @@
+///
+/// @file texture.hpp
+/// @author geffevil
+///
 #pragma once
 #include "../../lib/glad/glad.h"
 #include "../utils/gpu_memory.hpp"
@@ -7,10 +11,13 @@
 #include <utility>
 
 namespace assets {
-    class texture : public asset {
 
+    /// @brief Class serving as asset wrapper around one OpenGL bindless texture
+    class texture : public asset {
         public: 
 
+            /// @brief Default constructor
+            /// Creates texture and initializes it to a known, invalid state
             texture();
 
             /// @brief Constructor for the texture 
@@ -22,14 +29,17 @@ namespace assets {
             /// @brief Destructor for the texture class
             ~texture();    
 
-            /// @brief Makes texture resident in GPU memory and popuales @c m_texture_index
+            /// @brief Makes texture resident in GPU memory and stores its index
             void use();   
 
-            /// @brief Getter for texture's parameters (size [px], # of color channels)
+            /// @brief Getter for texture's parameters
+            /// @returns Pair of texture size (in px) and number of channels present in the texture
             inline std::pair<glm::ivec2, int> texture_params() const { return std::make_pair(glm::ivec2(m_w, m_h), m_channels); }
         
+            /// @brief Getter for the texture's bindless handle
             inline GLuint64 texture_handle() const { return m_texture_handle; }
 
+            /// @brief Getter for the texture's index within the GPU texture pool
             int texture_index() const { return m_texture_index; } 
 
         private:

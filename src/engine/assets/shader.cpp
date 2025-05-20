@@ -7,43 +7,45 @@
 #include <iostream>
 #include <fstream>
 
+#include <glm/glm.hpp>
+#include <glm/gtc/type_ptr.hpp>
 
 #include "shader.hpp"
 #include "../utils/buffer.hpp"
 
+using namespace glm;
 using namespace std;
-using namespace utils;
 using namespace assets;
 
-static const unordered_map<string, GLenum> _ext_type_map = {
-    {".geom", GL_GEOMETRY_SHADER},
+static const unordered_map<string, GLenum> c_extension_type_map = {
     {".frag", GL_FRAGMENT_SHADER},
     {".vert", GL_VERTEX_SHADER}
 };
 
 shader_stage::shader_stage(string path)
-    : _type_bitmask(0) {
+    : m_type_bitmask(0) {
 
     GLint result = GL_FALSE;
+    GLenum m_type;
     
-    /* TODO: Add source resolving for #pragma use*/
-    GLenum _type;
+    /// @todo [Long-Term]: Shader system overhaul
+    
     /* Get type from filename */
     string ext = filesystem::path(path).extension();
-    if (auto it = _ext_type_map.find(ext); it != _ext_type_map.cend())
-        _type = it->second;
+    if (auto it = c_extension_type_map.find(ext); it != c_extension_type_map.cend())
+        m_type = it->second;
     else throw logic_error("Unknown shader type encountered");
 
     /* Generate type */
-    switch (_type) {
+    switch (m_type) {
         case GL_FRAGMENT_SHADER:
-            _type_bitmask |= GL_FRAGMENT_SHADER_BIT;
+            m_type_bitmask |= GL_FRAGMENT_SHADER_BIT;
             break;
         case GL_GEOMETRY_SHADER:
-            _type_bitmask |= GL_GEOMETRY_SHADER_BIT;
+            m_type_bitmask |= GL_GEOMETRY_SHADER_BIT;
             break;
         case GL_VERTEX_SHADER:
-            _type_bitmask |= GL_VERTEX_SHADER_BIT;
+            m_type_bitmask |= GL_VERTEX_SHADER_BIT;
     }
 
     ifstream shader_file = ifstream(path, ios::in);
@@ -62,7 +64,7 @@ shader_stage::shader_stage(string path)
     shader_file.close();
     
 	/* Compile */
-	GLenum shader = glCreateShader(static_cast<GLenum>(_type));
+	GLenum shader = glCreateShader(static_cast<GLenum>(m_type));
 	  
     const char* source = src_buffer.c_str();
 	glShaderSource(shader, 1, &source, nullptr);
@@ -78,27 +80,23 @@ shader_stage::shader_stage(string path)
         utils::buffer<GLchar> error_buffer = utils::buffer<GLchar>(error_len);
         glGetShaderInfoLog(shader, error_len, &error_len, error_buffer);
 
-        /* TODO: Move to internal logging (Once ready) */
-        std::cerr << "In file " << path << ":\n";
+        std::cerr << "[ERROR] In file " << path << ":\n";
         std::cerr << "  " << error_buffer << std::endl;
-
-        /* Output source code of the file*/
-        std::cerr << "\nSource: \n" << src_buffer.c_str() << std::endl;
 
         glDeleteShader(shader);
         throw runtime_error("Shader compilation error"); 
     }
     /* Compilation successful, link shader */
-    _program = glCreateProgram();
+    m_program = glCreateProgram();
     glProgramParameteri(
-        _program,
+        m_program,
         GL_PROGRAM_SEPARABLE, /* Programs are separable, defining a custom pipeline */
         GL_TRUE
     );
-    glAttachShader(_program, shader);
+    glAttachShader(m_program, shader);
 
-    glLinkProgram(_program);
-    glGetProgramiv(_program, GL_LINK_STATUS, &result);
+    glLinkProgram(m_program);
+    glGetProgramiv(m_program, GL_LINK_STATUS, &result);
     if (result == GL_FALSE)  {
      
         GLint error_len = 0;
@@ -108,119 +106,72 @@ shader_stage::shader_stage(string path)
         utils::buffer<GLchar> error_buffer = utils::buffer<GLchar>(error_len);
         glGetShaderInfoLog(shader, error_len, &error_len, error_buffer);
 
-        /* TODO: Move to internal logging (Once ready) */
-        std::cerr << "In file " << path << ":\n";
+        std::cerr << "[ERROR] In file " << path << ":\n";
         std::cerr << "  " << error_buffer << std::endl;
         glDeleteShader(shader);
         throw runtime_error("Shader linking error"); 
     }   
-    
-    /* Get attribs - TODO: compact into loop */
-    GLint attrib_count = 0,
-          uniform_count = 0,
-          uniform_block_count = 0;
-    glGetProgramiv(_program, GL_ACTIVE_ATTRIBUTES, &attrib_count);
-    glGetProgramiv(_program, GL_ACTIVE_UNIFORMS, &uniform_count);
-    glGetProgramiv(_program, GL_ACTIVE_UNIFORM_BLOCKS, &uniform_block_count);
 
-    GLint longest_attr, longest_uniform, longest_uniform_block;
-
-    /* Buffer to hold attribute names from OpenGL */
-    glGetProgramiv(_program, GL_ACTIVE_ATTRIBUTE_MAX_LENGTH, &longest_attr);
-    buffer<char> attr_name = buffer<char>(longest_attr);
-
-    /* Buffer to hold uniform names from OpenGL */
-    glGetProgramiv(_program,  GL_ACTIVE_UNIFORM_MAX_LENGTH, &longest_uniform);
-    buffer<char> uniform_name = buffer<char>(longest_uniform);
-
-    /* Buffer to hold uniform_block names from OpenGL */
-    glGetProgramiv(_program,  GL_ACTIVE_UNIFORM_MAX_LENGTH, &longest_uniform_block);
-    buffer<char> uniform_block_name = buffer<char>(longest_uniform_block);
-
-    /* Parse out attribs */
-    for (GLuint i = 0; i < static_cast<GLuint>(attrib_count); i++)
-    {
-        GLint attr_size;
-        GLenum attr_type;
-
-        /* Get attrib name */
-        glGetActiveAttrib(_program, i, longest_attr, NULL, &attr_size, &attr_type, attr_name);
-
-        /* Reslove location */
-        GLint location = glGetAttribLocation(_program, attr_name);
-        
-        /* Skip invalid ones */
-        if (location < 0)
-            continue;
-        
-        std::cout << path << " - " << attr_name << ": "  << location << std::endl;
-
-        /* Push to attr map - TODO: maybe save type aswell */
-        _used_attrib_locations[string(attr_name)] = location;
-    }
-
-    /* Parse out uniforms */
-    for (GLuint i = 0; i < static_cast<GLuint>(uniform_count); i++)
-    {
-        /* Get uniform name */
-        glGetActiveUniformName(_program, i, longest_uniform, NULL, uniform_name);
-
-        /* Reslove location */
-        GLint location = glGetUniformLocation(_program, uniform_name);
-
-        /* Skip invalid ones */
-        if (location < 0) continue;
-
-        std::cout << path << " - " << uniform_name << ": "  << location << std::endl;
-        /* Push to uniform map - TODO: maybe save type aswell */
-        _used_uniform_locations[string(uniform_name)] = location;
-    }
-
-    /* Parse out uniform blocks */
-    for (GLuint i = 0; i < static_cast<GLuint>(uniform_block_count); i++)
-    {
-        /* Get uniform name */
-        glGetActiveUniformBlockName(_program, i, longest_uniform, NULL, uniform_name);
-
-        /* Reslove location */
-        GLint binding = glGetUniformBlockIndex(_program, uniform_name);
-
-        /* Skip invalid ones */
-        if (binding < 0)
-            continue;
-
-        std::cout << path << " - " << uniform_name << ": "  << binding << std::endl;
-        /* Push to uniform map - TODO: maybe save type aswell */
-        _used_uniform_block_bindings[string(uniform_name)] = binding;
-    }
     /* Clean up */
-    glDetachShader(_program, shader);
+    glDetachShader(m_program, shader);
     glDeleteShader(shader);
 }
 
 shader_stage::~shader_stage() {
 
-
-    glDeleteProgram(_program);
-} 
-
-GLint shader_stage::attribute_location(string name) const {
-
-    if (auto iter = _used_attrib_locations.find(name); iter != _used_attrib_locations.cend())
-        return iter->second;
-    return -1;
+    glDeleteProgram(m_program);
 }
 
-GLint shader_stage::uniform_location(string name) const {
-
-    if (auto iter = _used_uniform_locations.find(name); iter != _used_uniform_locations.cend())
-        return iter->second;
-    return -1;
+/* Uniform setters - there is a lot of them*/
+template <> void shader_stage::m_set_uniform_value<int>(GLint location, const int& val) {
+    glProgramUniform1i(m_program, location, val);
 }
 
-GLint shader_stage::uniform_block_binding(string name) const {
+template <> void shader_stage::m_set_uniform_value<uint>(GLint location, const uint& val) {
+    glProgramUniform1ui(m_program, location, val);
+}
 
-    if (auto iter = _used_uniform_block_bindings.find(name); iter != _used_uniform_block_bindings.cend())
-        return iter->second;
-    return -1;
+template <> void shader_stage::m_set_uniform_value<float>(GLint location, const float& val) {
+    glProgramUniform1f(m_program, location, val);
+}
+
+template <> void shader_stage::m_set_uniform_value<bool>(GLint location, const bool& val) {
+    glProgramUniform1i(m_program, location, val);
+}
+
+template <> void shader_stage::m_set_uniform_value<ivec2>(GLint location, const ivec2& val) { 
+    glProgramUniform2iv(m_program, location, 1, value_ptr(val)); 
+}
+
+template <> void shader_stage::m_set_uniform_value<vec2>(GLint location, const vec2& val) {
+    glProgramUniform2fv(m_program, location, 1, value_ptr(val));
+}
+
+template <> void shader_stage::m_set_uniform_value<mat2x2>(GLint location, const mat2x2& val) {
+    glProgramUniformMatrix2fv(m_program, location, 1, GL_FALSE, value_ptr(val));
+}
+
+template <> void shader_stage::m_set_uniform_value<ivec3>(GLint location, const ivec3& val) {
+    glProgramUniform3iv(m_program, location, 1,  value_ptr(val));
+}
+
+template <> void shader_stage::m_set_uniform_value<vec3>(GLint location, const vec3& val) {
+    glProgramUniform3fv(m_program, location, 1,  value_ptr(val));
+}
+
+template <> void shader_stage::m_set_uniform_value<mat3x3>(GLint location, const mat3x3& val) {
+
+    glProgramUniformMatrix3fv(m_program, location, 1, GL_FALSE, value_ptr(val));
+}
+
+template <> void shader_stage::m_set_uniform_value<ivec4>(GLint location, const ivec4& val) {
+    glProgramUniform2iv(m_program, location, 1, value_ptr(val));
+}
+
+template <> void shader_stage::m_set_uniform_value<vec4>(GLint location, const vec4& val) {
+    glProgramUniform4fv(m_program, location, 1, value_ptr(val));
+}
+
+template <> void shader_stage::m_set_uniform_value<mat4x4>(GLint location, const mat4x4& val) {
+    glProgramUniformMatrix4fv(m_program, location, 1, GL_FALSE, value_ptr(val));
 }

@@ -1,6 +1,5 @@
 #pragma once
 #include <cstdint>
-#include <iostream>
 #include <string>
 #include <vector>
 #include <stdexcept>
@@ -21,14 +20,14 @@ namespace utils {
             
             static inline const std::string& project_name() { CHECK_AND_RETURN(m_project_name); }
             static inline const std::vector<uint32_t>& gl_global_capabilities() { CHECK_AND_RETURN(m_gl_global_capabilities); }
-            static inline size_t gpu_geometry_buffer_alloc_size() { std::cout << s_instance << std::endl; CHECK_AND_RETURN(m_gpu_geometry_buffer_alloc_size); }
-            static inline size_t gpu_material_buffer_alloc_size() { std::cout << s_instance << std::endl; CHECK_AND_RETURN(m_gpu_material_buffer_alloc_size); }
-            static inline size_t gpu_textures_buffer_alloc_size() { std::cout << s_instance << std::endl; CHECK_AND_RETURN(m_gpu_textures_buffer_alloc_size); }
+            static inline size_t gpu_geometry_buffer_alloc_size() { CHECK_AND_RETURN(m_gpu_geometry_buffer_alloc_size); }
+            static inline size_t gpu_material_buffer_alloc_size() { CHECK_AND_RETURN(m_gpu_material_buffer_alloc_size); }
+            static inline size_t gpu_textures_buffer_alloc_size() { CHECK_AND_RETURN(m_gpu_textures_buffer_alloc_size); }
             static inline int tex_min_filter() { CHECK_AND_RETURN(m_tex_min_filter); }
             static inline int tex_mag_filter() { CHECK_AND_RETURN(m_tex_mag_filter); }
             static inline float physics_interval() { CHECK_AND_RETURN(m_physics_interval); }   
             static inline const std::string& default_scene_path() { CHECK_AND_RETURN(m_default_scene_path); }
-
+            static inline const std::vector<std::string>& default_shaders() { CHECK_AND_RETURN(m_default_shaders); }
 
         private:
             inline static project_settings* s_instance = nullptr;
@@ -51,6 +50,7 @@ namespace utils {
 
             /* Game */
             std::string m_default_scene_path;
+            std::vector<std::string> m_default_shaders;
     };
 }
     

@@ -1,20 +1,13 @@
-#include "renderer.hpp"
-#include <cmath>
-#include <glm/ext/matrix_clip_space.hpp>
-#include <glm/ext/matrix_float4x4.hpp>
-#include <glm/ext/matrix_transform.hpp>
-#include <glm/ext/quaternion_geometric.hpp>
-#include <glm/ext/vector_float3.hpp>
-#include <glm/ext/vector_float4.hpp>
-#include <glm/fwd.hpp>
-#include <glm/geometric.hpp>
+#include <iostream>
+#include <glm/glm.hpp>
 #include <glm/gtc/type_ptr.hpp>
+#include "camera.hpp"
+#include "renderer.hpp"
+#include "../runtime.hpp"
+
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtx/quaternion.hpp>
-#include "camera.hpp"
-#include "../utils/logger.hpp"
 
-#include "../runtime.hpp"
 
 using namespace glm;
 using namespace rendering;
@@ -35,8 +28,13 @@ camera::camera(scene::scene_node* parent, float fov, float near, float far, bool
 
     glCreateBuffers(1, &m_camera_data);
     
-    glNamedBufferStorage(m_camera_data, 2 * sizeof(mat4x4) + sizeof(vec4), NULL, GL_DYNAMIC_STORAGE_BIT);
+    glNamedBufferStorage(m_camera_data, 2 * sizeof(mat4x4) + 2 * sizeof(vec4), NULL, GL_DYNAMIC_STORAGE_BIT);
     glNamedBufferSubData(m_camera_data, 0, sizeof(mat4x4), value_ptr(projection())); /* Push in default projection */
+    glNamedBufferSubData( /* Push clip plane data */
+        m_camera_data, 
+        2 * sizeof(mat4x4) + sizeof(vec4), sizeof(vec4), 
+        value_ptr(glm::vec4(m_near, m_far, 0,0))
+    );
 }
 
 camera::~camera() {
@@ -46,7 +44,7 @@ camera::~camera() {
 
 mat4x4 camera::view() const {
 
-    return lookAt(m_parent->position, m_parent->position + forward(), up());
+    return lookAt(parent()->position, parent()->position + forward(), up());
 }
 
 mat4x4 camera::projection() const {
@@ -57,12 +55,12 @@ mat4x4 camera::projection() const {
     return perspective(m_fov, asp_ratio, m_near, m_far);
 }
 
-vec3 camera::up() const {
-    return normalize(toMat3(m_parent->rotation) * UP);
+const vec3 camera::up() const {
+    return normalize(toMat3(parent()->rotation) * UP);
 }
 
-vec3 camera::forward() const {
-   return normalize(toMat3(m_parent->rotation) * FORWARD);
+const vec3 camera::forward() const {
+   return normalize(toMat3(parent()->rotation) * FORWARD);
 }
 
 /* Upload projection matrix to OpenGL only when dirty */
@@ -78,6 +76,11 @@ float camera::near(const float& near) {
         
     m_near = near;
     glNamedBufferSubData(m_camera_data, 0, sizeof(mat4x4), value_ptr(projection())); /* Push in default projection */
+    glNamedBufferSubData( /* Push updated clip plane data */
+        m_camera_data, 
+        2 * sizeof(mat4x4) + sizeof(vec4), sizeof(vec4), 
+        value_ptr(glm::vec4(m_near, m_far, 0,0))
+    );
 
     return m_near;
 }
@@ -86,18 +89,23 @@ float camera::far(const float& far) {
 
     m_far = far;
     glNamedBufferSubData(m_camera_data, 0, sizeof(mat4x4), value_ptr(projection())); /* Push in default projection */
+    glNamedBufferSubData( /* Push updated clip plane data */
+        m_camera_data, 
+        2 * sizeof(mat4x4) + sizeof(vec4), sizeof(vec4), 
+        value_ptr(glm::vec4(m_near, m_far, 0,0))
+    );
 
     return m_far;
 }
 
 void camera::make_active() {
 
-    if (!m_parent->in_active_scene()) {
-        logger::error << "Unable to make camera active, not in scene!" << std::endl;
+    if (!parent()->in_active_scene()) {
+        std::cerr << "[ERROR] Unable to make camera active, not in scene!" << std::endl;
         return;
     }
     
-    renderer::instance()->set_active_camera(m_parent->component<camera>());
+    renderer::instance()->set_active_camera(parent()->component<camera>());
 }
 
 void camera::scene_enter() {
@@ -107,7 +115,7 @@ void camera::scene_enter() {
 
 void camera::prepare_draw(const mat4x4& parent_transform) {
 
-    vec4 world_pos = vec4(m_parent->position, 1.0) * parent_transform;
+    vec4 world_pos = vec4(parent()->position, 1.0) * parent_transform;
 
     glNamedBufferSubData(
         m_camera_data, 

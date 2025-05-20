@@ -10,8 +10,7 @@
 
 #define MAKE_MESSAGE(T) public base_message {   \
     public:                                     \
-        T(const std::string& message)           \
-            : base_message(message) {}          \
+        T() : base_message() {}                 \
 }
 
 namespace utils::exceptions {
@@ -29,13 +28,7 @@ namespace utils::exceptions {
     
     class base_message : public std::exception {
         public:
-            base_message(const std::string& message)
-                : m_message(message) {}
-
-        const char* what() const throw() { return m_message.c_str(); }
-
-        private:
-            std::string m_message;
+            base_message() {}
     };
     
     class shader_compile_error : MAKE_ERROR(shader_compile_error);

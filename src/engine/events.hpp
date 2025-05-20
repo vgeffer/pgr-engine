@@ -11,27 +11,38 @@
 class events {
  
     public:
-        explicit events();
+        events();
+        ~events();
+        
+        events(const events&) = delete;
+        events(events&&) = delete;
+        
         void process_frame();
-        void apply_callbacks(game_window& window);
+        void apply_callbacks(const game_window& window);
         
         static bool is_key_pressed(key_code key);
-        static bool is_key_held(key_code key);
+        static bool is_key_held_down(key_code key);
         static bool is_key_released(key_code key);
+        static bool is_key_held_up(key_code key);
 
         static bool is_mouse_pressed(mouse_code button);
-        static bool is_mouse_held(mouse_code button);
+        static bool is_mouse_held_down(mouse_code button);
         static bool is_mouse_released(mouse_code button);
+        static bool is_mouse_held_up(mouse_code button);
+        
 
         static glm::vec2 mouse_pos();
         static glm::vec2 mouse_delta();
     
     private:
-        inline static events* _instance = nullptr;
-        
-        uint8_t _current_buffer = 0;
+        inline static events* s_instance = nullptr;        
 
-        std::array<std::array<uint8_t, 8192>, 2> _key_buffer;
-        std::array<uint8_t, 2> _mouse_button_buffer;
-        std::array<glm::vec2, 2> _mouse_pos_buffer;
+        std::array<uint64_t, 1024> m_key_buffer {},
+                                   m_key_delta_buffer {};    
+
+        uint8_t m_mouse_button_buffer = 0,
+                m_mouse_button_delta_buffer = 0;
+        
+        glm::vec2 m_mouse_pos;
+        glm::vec2 m_mouse_delta;
 };

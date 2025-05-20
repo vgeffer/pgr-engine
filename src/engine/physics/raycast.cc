@@ -10,7 +10,7 @@ using namespace glm;
 using namespace physics;
 using namespace physics::bounding_volumes;
 
-raycast_result raycast::intersects(bounding_volume& other) {
+raycast_result raycast::inrersect_first(bounding_volume& other) {
 
     switch (other.type()) {
         
@@ -35,6 +35,7 @@ raycast_result raycast::intersects(bounding_volume& other) {
         
             return {.result = true, .first_intersection = _origin + _direction * intersection_dist, .fi_distance = intersection_dist};
         }
+        
     }
     
 }

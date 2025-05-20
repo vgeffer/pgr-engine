@@ -1,8 +1,7 @@
 #include "texture.hpp"
+#include <GL/gl.h>
 #include <algorithm>
 #include <stdexcept>
-#include <array>
-#include <utility>
 #include "../utils/project_settings.hpp"
 #include "../rendering/renderer.hpp"
 
@@ -13,21 +12,13 @@ using namespace std;
 using namespace utils;
 using namespace assets;
 
-constexpr array<pair<GLenum, GLenum>, 4> IMAGE_FORMAT = { 
-    make_pair(GL_R8, GL_RED), 
-    make_pair(GL_RG8, GL_RG), 
-    make_pair(GL_RGB8, GL_RGB),
-    make_pair(GL_RGBA8, GL_RGBA) 
-};
-
-
 texture::texture()
-    : m_texture_obj(0), m_texture_index(-1), m_w(0), m_h(0), m_channels(0) {std::cout << "EFG" << std::endl; }
+    : m_texture_obj(0), m_texture_index(-1), m_w(0), m_h(0), m_channels(0) {}
 
 texture::texture(const std::string name) 
     : m_texture_index(-1) {
     
-    uint8_t* img_data = stbi_load(name.c_str(), &m_w, &m_h, &m_channels, 4);
+    uint8_t* img_data = stbi_load(name.c_str(), &m_w, &m_h, &m_channels, STBI_rgb_alpha);
     if (img_data == NULL)
         throw std::runtime_error("Image " + name + " not found or corrupted");
 
@@ -43,18 +34,19 @@ texture::texture(const std::string name)
     int mip_levels = static_cast<int>(min(5.0f, log2f(static_cast<float>(max(m_w, m_h)))));
 
     /* Send image to OpenGL */
-    glTextureStorage2D(m_texture_obj, mip_levels, IMAGE_FORMAT[m_channels - 1].first, m_w, m_h);
+    glTextureStorage2D(m_texture_obj, mip_levels, GL_RGBA8, m_w, m_h);
+    glPixelStorei(GL_PACK_ALIGNMENT, 1);
     glTextureSubImage2D(
         m_texture_obj, 
         0, 0, 0, 
         m_w, m_h, 
-        IMAGE_FORMAT[m_channels - 1].second, 
+        GL_RGBA, 
         GL_UNSIGNED_BYTE, img_data
     );
 
     /* Create b&w image, not just R */
     if (m_channels == 1) {
-        GLint swizzle[] = { GL_RED, GL_RED, GL_RED, GL_RED };
+        GLint swizzle[] = { GL_RED, GL_RED, GL_RED, GL_RED, GL_RED };
         glTextureParameteriv(m_texture_obj, GL_TEXTURE_SWIZZLE_RGBA, swizzle);
     }
 

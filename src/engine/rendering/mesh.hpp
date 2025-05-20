@@ -1,7 +1,10 @@
+///
+/// @file mesh.hpp
+/// @author geffevil
+///
 #pragma once
 #include "../../lib/glad/glad.h"
 #include "material.hpp"
-#include <glm/fwd.hpp>
 #include <glm/glm.hpp>
 #include <memory>
 #include "../scene/scene_node.hpp"
@@ -12,9 +15,9 @@ namespace rendering {
 
     class mesh {
         public:
-            struct vertex_t{
+            struct vertex{
 
-                vertex_t(glm::vec3&& p, glm::vec3&& n, glm::vec3&& t, glm::vec3&& bt, glm::vec2&& uv)
+                constexpr vertex(glm::vec3&& p, glm::vec3&& n, glm::vec3&& t, glm::vec3&& bt, glm::vec2&& uv)
                     : position(p), normal(n), tangent(t), bitangent(bt), uv(uv) {}
 
                 glm::vec3 position, 
@@ -43,14 +46,13 @@ namespace rendering {
             utils::gpu_allocator::handle m_elem_handle;
             GLuint m_first_vertex;
             GLuint m_first_index;
-
     };
     
     class mesh_instance : public scene::node_component {
         
         public:
             mesh_instance(scene::scene_node* parent, const utils::resource& res);    
-            mesh_instance(scene::scene_node* parent, std::shared_ptr<mesh>& drawable);
+            mesh_instance(scene::scene_node* parent, std::shared_ptr<mesh>& drawable, const material& mat);
             ~mesh_instance() override = default;  
               
             std::shared_ptr<mesh>& get_mesh() { return m_mesh; }

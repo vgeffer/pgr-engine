@@ -9,21 +9,26 @@
 #include <assimp/scene.h>
 #include <assimp/postprocess.h>
 #include <vector>
+#include "../rendering/renderer.hpp"
 
 using namespace glm;
 using namespace std;
 using namespace assets;
 using namespace rendering;
 
-model::model(string path, bool parse_material) 
+model::model(const string& path) 
     : mesh() {    
 
-    /* TODO: Down the line, replace with custom loader */
+    /// @todo [Long-Term]: Down the line, replace with custom loader
+    /// @todo [Mid-Term]: Allow parsing of model's own material files
     Assimp::Importer importer;
-    const aiScene* scene = importer.ReadFile(path.c_str(),
-        aiProcess_Triangulate |
-        aiProcess_FlipUVs |
-        aiProcess_GenNormals
+    const aiScene* scene = importer.ReadFile(path.c_str(), 0
+        | aiProcess_Triangulate 
+        | aiProcess_FlipUVs
+        | aiProcess_GenSmoothNormals 
+        | aiProcess_CalcTangentSpace 
+        | aiProcess_GenBoundingBoxes
+        | aiProcess_JoinIdenticalVertices
     );
 
     if (!scene || scene->mNumMeshes <= 0)
@@ -32,10 +37,7 @@ model::model(string path, bool parse_material)
     /* Grab the 0th mesh */
     const aiMesh* mesh = scene->mMeshes[0];
 
-   /* Bind mesh's VAO */
-   glBindVertexArray(attr_buffer);
-
-    vector<mesh::vertex_t> vertices;
+    vector<mesh::vertex> vertices;
     vertices.reserve(mesh->mNumVertices);
 
     /* Hopefully -O2 will do it's job */
@@ -43,43 +45,38 @@ model::model(string path, bool parse_material)
         vertices.emplace_back(
             glm::vec3(mesh->mVertices[i].x, mesh->mVertices[i].y, mesh->mVertices[i].z),
             glm::vec3(mesh->mNormals[i].x, mesh->mNormals[i].y, mesh->mNormals[i].z),
-            glm::vec2(mesh->mTextureCoords[0][i].x, mesh->mTextureCoords[0][i].y)/* TODO: */
+            glm::vec3(mesh->mTangents[i].x, mesh->mTangents[i].y, mesh->mTangents[i].z),
+            glm::vec3(mesh->mBitangents[i].x, mesh->mBitangents[i].y, mesh->mBitangents[i].z),
+            glm::vec2(mesh->mTextureCoords[0][i].x, mesh->mTextureCoords[0][i].y)
         );
-    el_count = vertices.size();
-    
-    /* Push vertices to GPU */
-    glBindBuffer(GL_ARRAY_BUFFER, vertex_buffer);
-    glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(vertices[0]), vertices.data(), GL_STATIC_DRAW);
 
-    if (mesh->HasFaces()) {
+    /* Reserve buffer for the vertices */
+    auto [vert_handle, vert_offset] = renderer::instance()->vertex_allocator().alloc_buffer(vertices.size() * sizeof(vertices[0]));
+    m_element_count = vertices.size();
 
-        vector<uint32_t> indices;
-        indices.reserve(mesh->mNumFaces * 3); /* A reasonable estimate, since all faces are triangles */
+    /* Upload the data */
+    renderer::instance()->vertex_allocator().buffer_data(vert_handle, vertices.size() * sizeof(vertices[0]), vertices.data());
+    m_vert_handle = vert_handle;
+    m_first_vertex = vert_offset / sizeof(vertices[0]);
 
-        for (size_t i = 0; i < mesh->mNumFaces; i++) {
+    if (!mesh->HasFaces())
+        throw std::logic_error("Non-indexed meshes not supported yet!");
 
-            const aiFace face = mesh->mFaces[i];
-            for (size_t e = 0; e < face.mNumIndices; e++)         
-                indices.emplace_back(face.mIndices[e]);   
-        }
-
-         /* Indices */
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, index_buffer);
-        glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices.size() * sizeof(indices[0]), indices.data(), GL_STATIC_DRAW);
-        el_count = indices.size();
+    m_indexed = true;
+    vector<uint32_t> indices;
+    indices.reserve(mesh->mNumFaces * 3); /* A reasonable estimate, since all faces are triangles */
+    for (size_t i = 0; i < mesh->mNumFaces; i++) {
+        const aiFace face = mesh->mFaces[i];
+        for (size_t e = 0; e < face.mNumIndices; e++)         
+            indices.emplace_back(face.mIndices[e]);   
     }
+    
+    /* Reserve buffer for the indices */
+    auto [elem_handle, elem_offset] = renderer::instance()->element_allocator().alloc_buffer(indices.size() * sizeof(indices[0]));
+    m_element_count = indices.size();
 
-    glVertexAttribPointer(0, 3, GL_FLOAT, false, sizeof(vertices[0]), reinterpret_cast<void*>(0 * sizeof(float)));
-    glVertexAttribPointer(1, 3, GL_FLOAT, false, sizeof(vertices[0]), reinterpret_cast<void*>(3 * sizeof(float)));
-    glVertexAttribPointer(2, 2, GL_FLOAT, false, sizeof(vertices[0]), reinterpret_cast<void*>(6 * sizeof(float)));
-    
-    glEnableVertexAttribArray(0);
-    glEnableVertexAttribArray(1);
-    glEnableVertexAttribArray(2);
-    
-    /* Unbind anything still bound */
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+    /* Upload the data */
+    renderer::instance()->element_allocator().buffer_data(elem_handle, indices.size() * sizeof(indices[0]), indices.data());
+    m_elem_handle = elem_handle;
+    m_first_index = elem_offset / sizeof(indices[0]);   
 }
-    

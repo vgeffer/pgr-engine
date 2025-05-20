@@ -13,7 +13,8 @@ namespace physics {
     class raycast {
 
         public:
-            raycast_result intersects(bounding_volume& volume);
+            raycast_result inrersect_first(bounding_volume& volume, float max_length = -1);
+            
 
         private:
             glm::vec3 _origin;

@@ -1,23 +1,31 @@
 #include "../lib/glad/glad.h"
 #include "game_window.hpp"
+#include "window/key_code.hpp"
 #include "window/video_mode.hpp"
 #include <GLFW/glfw3.h>
+#include <glm/glm.hpp>
 #include <cstddef>
-#include <glm/ext/vector_int2.hpp>
+#include <iostream>
 #include <stdexcept>
 
 game_window::game_window()
-    : m_props({false, "", video_mode(), nullptr}) {
+    : m_props({false, "", video_mode(), nullptr}), m_cursor_state(cursor_state::cursor_visible) {
 
     /* Initialize GLFW */
     if (!glfwInit())
         throw std::runtime_error("GLFW context initialization failed!");
+
+    std::cerr << "Window created! (" << this << ")" << std::endl;
 }
 
 void game_window::create(const std::string& title, video_mode& mode) {
 
+
+
     /* Destroy old window if needed */
     if (m_props.glfw_handle != nullptr) {
+
+        std::cerr << "Old window deleted! (" << this << ")" << std::endl;
 
         glfwDestroyWindow(m_props.glfw_handle);
     }
@@ -64,10 +72,15 @@ void game_window::create(const std::string& title, video_mode& mode) {
         throw std::runtime_error("OpenGL context initialization failed!");
 
     glfwShowWindow(static_cast<GLFWwindow*>(m_props.glfw_handle));
+
+    std::cerr << "Window initialized! (" << this << ")" << std::endl;
+
 }
 
 game_window::~game_window() {
  
+    std::cerr << "Window destroyed! (" << this << ")" << std::endl;
+
     if (!m_props.glfw_handle)
         return;
     
@@ -75,6 +88,11 @@ game_window::~game_window() {
     glfwDestroyWindow(m_props.glfw_handle);
 
     glfwTerminate();
+}
+
+const cursor_state& game_window::cursor(const cursor_state& state) {
+    glfwSetInputMode(m_props.glfw_handle, GLFW_CURSOR, static_cast<int>(state));
+    return m_cursor_state = state;
 }
 
 void game_window::close() {
