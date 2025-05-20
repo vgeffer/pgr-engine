@@ -2,20 +2,23 @@
 
 namespace utils {
 
+    /// @brief A simple RAII buffer wrapping memory allocation
     template <typename T> 
-        class buffer {
+    class buffer {
 
         public:
-            explicit buffer(size_t count) { _raw_memory = new T[count]; }
+            /// @brief Constructor
+            /// @param count Number of items of size @c T to be allocated
+            explicit buffer(size_t count) { m_raw_memory = new T[count]; }
             buffer(const buffer<T>&) = default;
-            ~buffer() { delete [] _raw_memory; }
+            ~buffer() { delete [] m_raw_memory; }
         
-            T& operator*() { return *_raw_memory; }
-            T operator=(T* other) { return _raw_memory = other; }
-            T* operator->() { return _raw_memory; }
-            operator T*() { return _raw_memory; }
+            T& operator*() { return *m_raw_memory; }
+            T operator=(T* other) { return m_raw_memory = other; }
+            T* operator->() { return m_raw_memory; }
+            operator T*() { return m_raw_memory; }
         
         private:
-            T* _raw_memory;
+            T* m_raw_memory;
     };
 };

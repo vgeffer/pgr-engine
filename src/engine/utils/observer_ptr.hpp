@@ -103,6 +103,11 @@ namespace utils {
                 if (m_data == nullptr) throw std::runtime_error("Trying to dereference an invalid pointer");
                 return m_data; 
             }
+
+            constexpr bool operator==(const observable_ptr<T>& other) const noexcept {
+                return m_data == other.m_data;
+            }
+
             constexpr observer_ptr<T> observer() {
                 if (m_state == nullptr || !m_state->ptr_valid)
                     throw std::runtime_error("observable_ptr does not contain any valid data to be observed!");
@@ -189,6 +194,14 @@ namespace utils {
             
                 if (!valid()) throw std::runtime_error("Trying to dereference an invalid pointer");
                 return m_data; 
+            }
+
+            constexpr bool operator==(const observer_ptr<T>& other) const noexcept {
+
+                if (!valid() || !other.valid())
+                    return false;
+
+                return m_data == other.m_data;
             }
 
             constexpr operator bool() const noexcept { return valid(); }
