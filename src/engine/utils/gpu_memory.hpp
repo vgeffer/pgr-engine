@@ -10,8 +10,8 @@ namespace utils {
     class gpu_allocator {
 
         private:
-            struct _alloc_chunk {
-                _alloc_chunk(size_t size, size_t off, bool used)
+            struct alloc_chunk {
+                alloc_chunk(size_t size, size_t off, bool used)
                     : chunk_size(size), offset(off), used(used) {}
 
                 size_t chunk_size;
@@ -20,7 +20,7 @@ namespace utils {
             };
 
         public:
-            using handle = std::forward_list<_alloc_chunk>::iterator;
+            using handle = std::forward_list<alloc_chunk>::iterator;
 
             gpu_allocator(size_t base_size, GLbitfield buffer_hints = 0);
             gpu_allocator(const gpu_allocator&) = delete;
@@ -40,7 +40,7 @@ namespace utils {
         private:
             size_t m_buffer_size;
             GLbitfield m_buffer_hints;
-            std::forward_list<_alloc_chunk> m_chunks;
+            std::forward_list<alloc_chunk> m_chunks;
 
             GLuint m_buffer;
     };

@@ -4,6 +4,7 @@
 #include <GLFW/glfw3.h>
 #include <glm/fwd.hpp>
 #include <cstdint>
+#include <iostream>
 #include <stdexcept>
     
 using namespace std;
@@ -18,7 +19,9 @@ events::~events() {
     s_instance = nullptr;
 }
 
-void events::apply_callbacks(game_window& window) {
+void events::apply_callbacks(const game_window& window) {
+
+    std::cerr << "Callbacks attached! (" << &window << ")" << std::endl;
 
     /* Get initial mouse position - so no weirdness occurs */
     double initial_mouse_x, initial_mouse_y;

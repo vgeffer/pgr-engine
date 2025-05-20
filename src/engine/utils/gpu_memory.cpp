@@ -4,7 +4,6 @@
 #include <iostream>
 #include <stdexcept>
 #include <string>
-#include "../utils/logger.hpp"
 
 using namespace std;
 using namespace utils;
@@ -61,7 +60,7 @@ size_t gpu_allocator::buffer_data(const gpu_allocator::handle& handle, size_t da
 
     size_t size_to_write = min(data_size, handle->chunk_size);
     if (size_to_write < data_size)
-        logger::warn << "Requesting to write " << data_size << " bytes to a buffer of size " << handle->chunk_size
+        std::cerr << "[WARNING] Requesting to write " << data_size << " bytes to a buffer of size " << handle->chunk_size
                      << ". Only " << size_to_write << " bytes will be written" << std::endl; 
 
     glNamedBufferSubData(m_buffer, handle->offset, size_to_write, data);
@@ -71,7 +70,7 @@ size_t gpu_allocator::buffer_data(const gpu_allocator::handle& handle, size_t da
 void gpu_allocator::free_buffer(const gpu_allocator::handle& handle) {
 
     if (handle == m_chunks.end() || !handle->used) {
-        logger::error << "[In buffer: " << m_buffer << "] Double free! Attempting to free already freed block" << std::endl;
+        std::cerr << "[ERROR] In buffer: " << m_buffer << "] Double free! Attempting to free already freed block" << std::endl;
         return;
     }
 
@@ -86,11 +85,12 @@ void gpu_allocator::free_buffer(const gpu_allocator::handle& handle) {
         for (auto iter = m_chunks.begin(); iter != m_chunks.end(); iter++) {
 
             /* Conditions are not met */
-            if (iter->used || iter._M_next() == m_chunks.end() || iter._M_next()->used)
+            auto next = std::next(iter);
+            if (iter->used || next == m_chunks.end() || next->used)
                 continue;
 
             /* Merge next to the current chunk and remove it */
-            iter->chunk_size += iter._M_next()->chunk_size;
+            iter->chunk_size += next->chunk_size;
             m_chunks.erase_after(iter);
             blocks_merged++;
         }

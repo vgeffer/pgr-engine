@@ -22,19 +22,32 @@ namespace scene {
 
         public:
             enum class node_type {
-                GENERIC, ROOT
+                GENERIC,    ///< Generic node 
+                ROOT        ///< Root node. There may be only one root node in the scene at any time
             };
 
+            /// @brief Constructs generic scene node named @c name
+            /// @param name Name of the node
             scene_node(const std::string& name);
+
+            /// @brief Constructs node of type @c type with name @c name
+            /// @param name Name of the node
+            /// @param type Type of the node
             scene_node(const std::string& name, node_type type);
+
+            /// @brief Constructs generic node from JSON
+            /// @param res JSON resource
             scene_node(const utils::resource& res);
 
             scene_node(const scene_node&) = delete;
             virtual ~scene_node();
 
+            /// @brief Calls the update of the node
+            /// @param delta Delta time 
             void update_node(float delta);
             void prepare_draw(const glm::mat4x4& parent_transform);
 
+            /// @brief Adds child node
             void add_child(scene_node* node);
             
             scene_node* child(const std::string& name) const;
@@ -47,7 +60,7 @@ namespace scene {
             inline bool enabled(bool value) { return m_enabled = value; }
 
             inline bool visible() const { return m_visible; }
-            inline bool visible(bool value) { return m_visible = value; }
+            bool visible(bool value);
 
             template<class T>
                 inline utils::observer_ptr<T> component() { return utils::observer_cast<T>(m_components.get<T>().observer()); } 
@@ -81,17 +94,33 @@ namespace scene {
             node_type m_type;
     };
 
+    /// @brief Base class for the node components
+    ///
+    /// This class has no functionality by itself, it only provides a common scene interface for derived classes
     class node_component {
 
         public:
             virtual ~node_component() = default;
 
+            /// @brief Callback, called when parent node enters the scene for the first time
             virtual void scene_enter() {}
+
+            /// @brief Callback, called when the parent node exits (is deleted from) the scene
             virtual void scene_exit() {}
 
+            /// @brief Callback, prepares underlying object for rendering
+            /// @param parent_transform Model matrix of the parent node
             virtual void prepare_draw(const glm::mat4x4& parent_transform) {}
 
+            /// @brief Callback, visibility notifier
+            virtual void visibility_changed() {}
+
+            /// @brief Callback, called once per frame
+            /// @param delta Time elapsed since the last frame (in seconds)
             virtual void update(float delta) {}
+
+            /// @brief Callback, called in constant, periodic intervals
+            /// @param delta Time elapsed since last call
             virtual void fixed_update(float delta) {}
 
             inline scene_node* parent() const { return m_parent; }
@@ -100,11 +129,13 @@ namespace scene {
             node_component(scene_node* parent) : m_parent(parent) {}
 
         private:
-            scene_node* m_parent;
+            scene_node* m_parent;   ///< Parent node
     };
 
     namespace _internal {
 
+        /// @brief Class providing node component auto-registration funcitonality
+        /// @private
         class component_registry {
               
             public:

@@ -18,7 +18,7 @@ class events {
         events(events&&) = delete;
         
         void process_frame();
-        void apply_callbacks(game_window& window);
+        void apply_callbacks(const game_window& window);
         
         static bool is_key_pressed(key_code key);
         static bool is_key_held_down(key_code key);
@@ -37,11 +37,11 @@ class events {
     private:
         inline static events* s_instance = nullptr;        
 
-        std::array<uint64_t, 1024> m_key_buffer,
-                                   m_key_delta_buffer;    
+        std::array<uint64_t, 1024> m_key_buffer {},
+                                   m_key_delta_buffer {};    
 
-        uint8_t m_mouse_button_buffer,
-                m_mouse_button_delta_buffer;
+        uint8_t m_mouse_button_buffer = 0,
+                m_mouse_button_delta_buffer = 0;
         
         glm::vec2 m_mouse_pos;
         glm::vec2 m_mouse_delta;

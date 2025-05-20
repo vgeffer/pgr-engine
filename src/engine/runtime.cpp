@@ -1,26 +1,20 @@
 #include "runtime.hpp"
 #include "assets/loader.hpp"
 #include "assets/scene.hpp"
-#include "assets/shader.hpp"
 #include "events.hpp"
 #include "game_window.hpp"
 #include "scene/scene_node.hpp"
-#include "physics/physics.hpp"
-#include "rendering/renderer.hpp"
-#include "utils/logger.hpp"
 #include "utils/project_settings.hpp"
 
 #include <GLFW/glfw3.h>
 #include <chrono>
 #include <glm/ext/matrix_transform.hpp>
 #include <glm/fwd.hpp>
-#include <memory>
 
 using namespace glm;
 using namespace std;
 using namespace scene;
 using namespace utils;
-using namespace physics;
 using namespace rendering;
 using namespace std::chrono;
 
@@ -65,13 +59,11 @@ using namespace std::chrono;
 #endif
 
 
-/* Tie singletons with the app */
-events g_events = events();
-
 engine_runtime::engine_runtime(game_window& window) 
-    : _root_node(new scene_node("GLOBAL_ROOT", scene_node::node_type::ROOT)), _window(window) {
+    : m_root_node(new scene_node("GLOBAL_ROOT", scene_node::node_type::ROOT)), m_window(window), m_global_clock(0.0f) {
 
-    _instance = this;
+    std::cerr << "Runtime created (" << &m_window << ")" << std::endl; 
+    s_instance = this;
 
     #ifndef NDEBUG
         glEnable(GL_DEBUG_OUTPUT);
@@ -80,23 +72,17 @@ engine_runtime::engine_runtime(game_window& window)
         glDebugMessageControl(GL_DONT_CARE, GL_DONT_CARE, GL_DONT_CARE, 0, nullptr, GL_TRUE);
     #endif
 
-    _renderer = make_unique<renderer>();
-    _physics = make_unique<physics_engine>();
-
-    g_events.apply_callbacks(window);
-
-    glfwSetWindowCloseCallback(window.props().glfw_handle, [](GLFWwindow*) { engine_runtime::_instance->_window.close(); });
+    m_renderer.init();
+    m_events.apply_callbacks(window);
+    
+    glfwSetWindowCloseCallback(window.props().glfw_handle, [](GLFWwindow*) { engine_runtime::s_instance->m_window.close(); });
     glViewport(0, 0, window.props().current_mode.size().x, window.props().current_mode.size().y);
 };
 
 engine_runtime::~engine_runtime() {
 
     /* Delete the scene */
-    delete _root_node;
-}
-    
-engine_runtime* engine_runtime::instance() {
-    return _instance;
+    delete m_root_node;
 }
 
 void engine_runtime::start() {           
@@ -113,13 +99,13 @@ void engine_runtime::start() {
     root_node(initial_scene->instantiate());
 
     /* Check if renderer has a valid camera */
-    if (!_renderer->has_active_camera())
-        logger::error << "No main camera found in the scene! For rendering to work, you'll need to set one up manually" << std::endl;
+    if (!m_renderer.has_active_camera())
+        cerr << "No main camera found in the scene! For rendering to work, you'll need to set one up manually" << std::endl;
 
     /* Mainloop */
-    while (!_window.props().is_closing) {
+    while (!m_window.props().is_closing) {
         
-        g_events.process_frame();
+        m_events.process_frame();
 
         /* Calculate time elapsed since last frame */
         tp_now = system_clock::now();
@@ -127,41 +113,39 @@ void engine_runtime::start() {
         tp_prev = tp_now;        
         
         physics_delta += elapsed;
+        m_global_clock += elapsed;
 
         /* Physics */
         while (physics_delta >= physics_interval) {
-            _physics->tick(physics_interval);
+            /* Fixed update */
             physics_delta -= physics_interval;
         }
 
         /* Logic */
         const mat4x4 ident = identity<mat4x4>();
         
-        if (_root_node != nullptr) {
-            _root_node->update_node(elapsed);
-            _root_node->prepare_draw(ident);
+        if (m_root_node != nullptr) {
+            m_root_node->update_node(elapsed);
+            m_root_node->prepare_draw(ident);
         }
 
         /* Render & postprocess */
-        _renderer->draw_scene();
+        m_renderer.draw_scene();
 
         /* Display new frame */
-        glfwSwapBuffers(_window.props().glfw_handle);
+        glfwSwapBuffers(m_window.props().glfw_handle);
     }
 }
 
 scene_node* engine_runtime::root_node(scene_node* root) {
 
     /* Delete children of root node */
-    for (auto& [name, child] : _root_node->children())
+    for (auto& [name, child] : m_root_node->children())
         delete child;
 
     /* Add node to scene - recursively adds children to scene */
-    _root_node->add_child(root);       
-
-    /* Recompute Bounding Volume Hierarchy for new scene */
-    _physics->recompute_bv_hierarchy(root);
+    m_root_node->add_child(root);       
 
     /* Return */
-    return _root_node;
+    return m_root_node;
 }

@@ -93,11 +93,11 @@ void scene_node::prepare_draw(const glm::mat4x4& parent_transform) {
     
     /* Prepare components */
     for (auto& [id, component] : m_components.get_all()) 
-        component->prepare_draw(model_mat() * parent_transform);
+        component->prepare_draw(parent_transform * model_mat());
 
     /* Process children */
     for (auto [name, child] : m_children)
-        child->prepare_draw(model_mat() * parent_transform);
+        child->prepare_draw(parent_transform * model_mat());
 }
 
 void scene_node::add_child(scene_node* node) {
@@ -126,11 +126,26 @@ void scene_node::add_child(scene_node* node) {
 
 scene_node* scene_node::child(const string& name) const {
 
-    /// @todo: [Mid-Term]: Update to use the resource system for paths in scene
-    if (auto iter = m_children.find(name); iter != m_children.end())
-        return iter->second;
+    vector<string> path_components = utils::split(name, "/");
+    if (path_components.empty())
+        throw std::logic_error("Invalid path provided, child " + name + " not found!");
 
-    throw runtime_error("Child index out of bounds");
+    /* First one needs to be explicitly checked*/
+    auto child_iter = m_children.find(path_components[0]);
+    if (child_iter == m_children.cend())
+        throw std::logic_error("Invalid path provided, child " + name + " not found!");
+        
+    auto child = child_iter->second;
+    for (size_t i = 1; i < path_components.size(); i++) {
+                 
+        auto iter = child->m_children.find(path_components[i]); 
+        if(iter == child->m_children.end())
+            throw std::logic_error("Invalid path provided, child " + name + " not found!");
+
+        child = iter->second;
+    }
+
+    return child;
 }
 
 mat4x4 scene_node::model_mat() const {
@@ -139,6 +154,24 @@ mat4x4 scene_node::model_mat() const {
         translate(identity<mat4x4>(), position) * toMat4(rotation),
         scale
     );
+}
+
+bool scene_node::visible(bool v) {
+
+    if (v == m_visible)
+        return m_visible;
+
+    m_visible = v;
+
+    /* Tell all the components that visibility changed */
+    for (auto& [id, component] : m_components.get_all()) 
+        component->visibility_changed();
+
+    /* Process children */
+    for (auto [name, child] : m_children)
+        child->visible(v);
+
+    return m_visible;
 }
 
 void scene_node::m_on_scene_enter() {

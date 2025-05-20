@@ -1,32 +1,43 @@
 #pragma once
 
-#include "scene/scene_node.hpp"
-#include "physics/physics.hpp"
 #include "rendering/renderer.hpp"
+#include "events.hpp"
+#include "scene/scene_node.hpp"
 #include "game_window.hpp"
 
 #include <glm/fwd.hpp>
-#include <memory>
 
+/// @brief Main runtime class of the engine
 class engine_runtime {
    
     public:
+        /// @brief Creates and initializes the runtime
+        ///
+        /// @param window Window to tie the runtime to
         engine_runtime(game_window& window);
         ~engine_runtime();
+
+        /// @brief Starts the mainloop
         void start(); 
 
-        static engine_runtime* instance();
+        inline static engine_runtime* instance() { return s_instance; }
         
-        inline scene::scene_node* root_node() const { return _root_node; }
-        scene::scene_node* root_node(scene::scene_node* node);
+        inline const scene::scene_node* root_node() const { return m_root_node; }
 
-        inline game_window& window() const { return _window; }
+        /// @brief Sets the scene's root node
+        /// @param node New root node
+        /// @returns New root node
+        scene::scene_node* root_node(scene::scene_node* node);
+        
+        inline float global_clock() const { return m_global_clock; }
+        inline game_window& window() const { return m_window; }
 
     private:
-        inline static engine_runtime* _instance = nullptr;
-        scene::scene_node* _root_node;
-        game_window& _window;
+        inline static engine_runtime* s_instance = nullptr;
+        scene::scene_node* m_root_node; ///< Root node of the scene
+        game_window& m_window;          ///< Window to render to
+        float m_global_clock;           ///< Global clock
 
-        std::unique_ptr<physics::physics_engine> _physics;
-        std::unique_ptr<rendering::renderer> _renderer;
+        events m_events;                ///< Event handler instance
+        rendering::renderer m_renderer; ///< Renderer instance
 };
