@@ -4,7 +4,6 @@
 #include "mesh.hpp"
 #include "material.hpp"
 #include "meshes/billboard.hpp"
-#include "meshes/camera.hpp"
 #include "renderer.hpp"
 #include "../assets/model.hpp"
 #include "../assets/displacement.hpp"
@@ -41,9 +40,6 @@ mesh_instance::mesh_instance(scene::scene_node* parent, const utils::resource& r
         m_mesh = std::move(assets::loader::load<assets::displacement>(
             res.deserialize<std::string>("mesh/path")
         ));
-
-    else if (type == "builtin_camera")
-        m_mesh = std::make_shared<camera_mesh>();
 
     else if (type == "billboard")
         m_mesh = std::make_shared<billboard>();

@@ -1,5 +1,4 @@
 #include "texture.hpp"
-#include <GL/gl.h>
 #include <algorithm>
 #include <stdexcept>
 #include "../utils/project_settings.hpp"

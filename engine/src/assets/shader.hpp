@@ -8,6 +8,7 @@
 #include "asset.hpp"
 #include <array>
 #include <string>
+#include <string_view>
 
 namespace assets {
     class shader_stage : public asset {
@@ -24,11 +25,12 @@ namespace assets {
             ///
             /// @param path Filesystem path of the shader
             shader_stage(const std::string path);
+            shader_stage(const std::string_view& shader_source, GLenum type);
 
             /// @brief Destructor for the shader_stage class
             /// Destroys OpenGL shader objects and cleans used memory
             ~shader_stage();
-    
+     
             template <typename Tp> 
             void set_uniform(std::string uniform_name, const Tp& val) {
             

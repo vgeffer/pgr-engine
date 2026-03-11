@@ -1,5 +1,4 @@
 #include "cubemap.hpp"
-#include <GL/gl.h>
 #include <algorithm>
 #include <stdexcept>
 #include <string>

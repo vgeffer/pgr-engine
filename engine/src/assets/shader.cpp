@@ -19,7 +19,8 @@ using namespace assets;
 
 static const unordered_map<string, GLenum> c_extension_type_map = {
     {".frag", GL_FRAGMENT_SHADER},
-    {".vert", GL_VERTEX_SHADER}
+    {".vert", GL_VERTEX_SHADER},
+    {".comp", GL_COMPUTE_SHADER}
 };
 
 shader_stage::shader_stage(string path)
@@ -107,6 +108,77 @@ shader_stage::shader_stage(string path)
         glGetShaderInfoLog(shader, error_len, &error_len, error_buffer);
 
         std::cerr << "[ERROR] In file " << path << ":\n";
+        std::cerr << "  " << error_buffer << std::endl;
+        glDeleteShader(shader);
+        throw runtime_error("Shader linking error"); 
+    }   
+
+    /* Clean up */
+    glDetachShader(m_program, shader);
+    glDeleteShader(shader);
+}
+
+shader_stage::shader_stage(const std::string_view& shader_source, GLenum type)
+    : m_type_bitmask(0) {
+
+    GLint result = GL_FALSE;
+
+    /* Generate type */
+    switch (type) {
+        case GL_FRAGMENT_SHADER:
+            m_type_bitmask |= GL_FRAGMENT_SHADER_BIT;
+            break;
+        case GL_GEOMETRY_SHADER:
+            m_type_bitmask |= GL_GEOMETRY_SHADER_BIT;
+            break;
+        case GL_VERTEX_SHADER:
+            m_type_bitmask |= GL_VERTEX_SHADER_BIT;
+    }
+    
+	/* Compile */
+	GLenum shader = glCreateShader(static_cast<GLenum>(type));
+    const char *src = shader_source.begin();
+
+	glShaderSource(shader, 1, &src, nullptr);
+    glCompileShader(shader);
+
+    glGetShaderiv(shader, GL_COMPILE_STATUS, &result);
+    if (result == GL_FALSE)  {
+     
+        GLint error_len = 0;
+        glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &error_len);
+    
+        // The maxLength includes the NULL character
+        utils::buffer<GLchar> error_buffer = utils::buffer<GLchar>(error_len);
+        glGetShaderInfoLog(shader, error_len, &error_len, error_buffer);
+
+        std::cerr << "[ERROR] ";
+        std::cerr << "  " << error_buffer << std::endl;
+
+        glDeleteShader(shader);
+        throw runtime_error("Shader compilation error"); 
+    }
+    /* Compilation successful, link shader */
+    m_program = glCreateProgram();
+    glProgramParameteri(
+        m_program,
+        GL_PROGRAM_SEPARABLE, /* Programs are separable, defining a custom pipeline */
+        GL_TRUE
+    );
+    glAttachShader(m_program, shader);
+
+    glLinkProgram(m_program);
+    glGetProgramiv(m_program, GL_LINK_STATUS, &result);
+    if (result == GL_FALSE)  {
+     
+        GLint error_len = 0;
+        glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &error_len);
+    
+        // The maxLength includes the NULL character
+        utils::buffer<GLchar> error_buffer = utils::buffer<GLchar>(error_len);
+        glGetShaderInfoLog(shader, error_len, &error_len, error_buffer);
+
+        std::cerr << "[ERROR] ";
         std::cerr << "  " << error_buffer << std::endl;
         glDeleteShader(shader);
         throw runtime_error("Shader linking error"); 

@@ -1,6 +1,7 @@
 #include "renderer.hpp"
 
 #include <glm/detail/qualifier.hpp>
+#include <memory>
 #include <stdexcept>
 #include <utility>
 #include <glm/glm.hpp>
@@ -13,6 +14,11 @@
 #include "../utils/project_settings.hpp"
 #include "../runtime.hpp"
 #include "../assets/loader.hpp"
+
+#include "shaders/quad.gen.hpp"
+#include "shaders/skybox_vert.gen.hpp"
+#include "shaders/skybox_frag.gen.hpp"
+#include "shaders/combination.gen.hpp"
 
 using namespace std;
 using namespace glm;
@@ -62,10 +68,10 @@ void renderer::init() {
     m_skybox_first_vertex = s_offset / sizeof(mesh::vertex);
 
     /* Load shaders */
-    m_quad_vertex_shader = loader::load<shader_stage>("shaders/quad.vert");
-    m_combination_shader = loader::load<shader_stage>("shaders/combination.frag");
-    m_skybox_vertex_shader = loader::load<shader_stage>("shaders/skybox.vert");
-    m_skybox_fragment_shader = loader::load<shader_stage>("shaders/skybox.frag");
+    m_quad_vertex_shader     = std::make_shared<shader_stage>(quad_source,        GL_VERTEX_SHADER);
+    m_skybox_vertex_shader   = std::make_shared<shader_stage>(skybox_vert_source, GL_VERTEX_SHADER);
+    m_skybox_fragment_shader = std::make_shared<shader_stage>(skybox_frag_source, GL_FRAGMENT_SHADER);
+    m_combination_shader     = std::make_shared<shader_stage>(combination_source, GL_FRAGMENT_SHADER);
     
 
     for (const auto& stage_path : project_settings::default_shaders()) {
