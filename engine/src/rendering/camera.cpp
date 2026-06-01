@@ -3,7 +3,6 @@
 #include <glm/gtc/type_ptr.hpp>
 #include "camera.hpp"
 #include "renderer.hpp"
-#include "../runtime.hpp"
 
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtx/quaternion.hpp>
@@ -49,8 +48,8 @@ mat4x4 camera::view() const {
 
 mat4x4 camera::projection() const {
     
-    const game_window::window_props_t& props = engine_runtime::instance()->window().props();
-    float asp_ratio = static_cast<float>(props.current_mode.size().x) / static_cast<float>(props.current_mode.size().y);
+    //const game_window::window_props_t& props = engine_runtime::instance()->window().props();
+    float asp_ratio = static_cast<float>(3) / static_cast<float>(2);
 
     return perspective(m_fov, asp_ratio, m_near, m_far);
 }

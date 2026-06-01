@@ -24,11 +24,6 @@ texture::texture(const std::string name)
     /* Create OpenGL texture object */ 
     glCreateTextures(GL_TEXTURE_2D, 1, &m_texture_obj);
 
-    glTextureParameteri(m_texture_obj, GL_TEXTURE_MIN_FILTER, project_settings::tex_min_filter());
-    glTextureParameteri(m_texture_obj, GL_TEXTURE_MAG_FILTER, project_settings::tex_mag_filter());
-    glTextureParameteri(m_texture_obj, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    glTextureParameteri(m_texture_obj, GL_TEXTURE_WRAP_T, GL_REPEAT);
-            
     /* Calculate number of mipmap levels */
     int mip_levels = static_cast<int>(min(5.0f, log2f(static_cast<float>(max(m_w, m_h)))));
 

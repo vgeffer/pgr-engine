@@ -50,7 +50,7 @@ namespace rendering {
 
             inline bool transparent() const { return m_data.alpha < 0.95f; }
             inline int material_index() const { return m_material_index; }
-            inline std::unordered_map<GLbitfield, std::shared_ptr<assets::shader_stage>>& shader_stages() { return m_shader_stages; }
+            inline std::unordered_map<uint32_t, std::shared_ptr<assets::shader_stage>>& shader_stages() { return m_shader_stages; }
 
         private:
             /// @brief Structure containing material data
@@ -84,7 +84,7 @@ namespace rendering {
             std::array<std::shared_ptr<assets::texture>, 2> m_normal_maps;
             std::array<std::shared_ptr<assets::texture>, 2> m_blend_maps;
 
-            std::unordered_map<GLbitfield, std::shared_ptr<assets::shader_stage>> m_shader_stages;
+            std::unordered_map<uint32_t, std::shared_ptr<assets::shader_stage>> m_shader_stages;
             utils::gpu_allocator::handle m_buffer_handle;
             int m_material_index;
         };

@@ -13,7 +13,7 @@
         T() : base_message() {}                 \
 }
 
-namespace pgreng::utils::exceptions {
+namespace utils::exceptions {
 
     class base_error : public std::exception {
         public:
@@ -36,5 +36,6 @@ namespace pgreng::utils::exceptions {
     class shader_uniform_error : MAKE_ERROR(shader_uniform_error);
     class resource_load_error : MAKE_ERROR(resource_load_error);    
 
-    class app_reload_message : MAKE_MESSAGE(app_reload_message);
+    class window_reload_message : MAKE_MESSAGE(window_reload_message);
+    class app_reload_message :  MAKE_MESSAGE(app_reload_message);
 }

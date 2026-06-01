@@ -1,9 +1,13 @@
 #pragma once
 #include <utility>
+#include "../common/common.hpp"
 
-namespace pgreng::events {
+namespace events {
 
     #define EVENT(...) events::event<__VA_ARGS__>
+    #define TO_HANDLER(event, function) decltype(event)::handler_type::create<&function>()
+    #define TO_HANDLER2(event, function) decltype(event)::handler_type::create<SELF, &function>(this)
+    #define TO_HANDLER_CLASS(event, function, instance) decltype(event)::handler_type::create<std::remove_pointer<decltype(instance)>::type, &function>(instance)
 
     template <typename T>
     class event_handler;

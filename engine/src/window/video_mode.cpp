@@ -4,6 +4,7 @@
 #include "../utils/resource.hpp"
 
 using namespace std;
+using namespace pgreng::window;
 using namespace utils;
 
 

@@ -26,7 +26,7 @@ static const unordered_map<string, GLenum> c_extension_type_map = {
 shader_stage::shader_stage(string path)
     : m_type_bitmask(0) {
 
-    GLint result = GL_FALSE;
+    GLint result = GL_TRUE;
     GLenum m_type;
     
     /// @todo [Long-Term]: Shader system overhaul
@@ -65,63 +65,63 @@ shader_stage::shader_stage(string path)
     shader_file.close();
     
 	/* Compile */
-	GLenum shader = glCreateShader(static_cast<GLenum>(m_type));
+	GLenum shader = 0;//glCreateShader(static_cast<GLenum>(m_type));
 	  
     const char* source = src_buffer.c_str();
-	glShaderSource(shader, 1, &source, nullptr);
-    glCompileShader(shader);
+	//glShaderSource(shader, 1, &source, nullptr);
+    //glCompileShader(shader);
 
-    glGetShaderiv(shader, GL_COMPILE_STATUS, &result);
+    //glGetShaderiv(shader, GL_COMPILE_STATUS, &result);
     if (result == GL_FALSE)  {
      
         GLint error_len = 0;
-        glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &error_len);
+    //    glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &error_len);
     
         // The maxLength includes the NULL character
         utils::buffer<GLchar> error_buffer = utils::buffer<GLchar>(error_len);
-        glGetShaderInfoLog(shader, error_len, &error_len, error_buffer);
+    //    glGetShaderInfoLog(shader, error_len, &error_len, error_buffer);
 
         std::cerr << "[ERROR] In file " << path << ":\n";
         std::cerr << "  " << error_buffer << std::endl;
 
-        glDeleteShader(shader);
+    //    glDeleteShader(shader);
         throw runtime_error("Shader compilation error"); 
     }
     /* Compilation successful, link shader */
-    m_program = glCreateProgram();
-    glProgramParameteri(
-        m_program,
-        GL_PROGRAM_SEPARABLE, /* Programs are separable, defining a custom pipeline */
-        GL_TRUE
-    );
-    glAttachShader(m_program, shader);
+    m_program = 0;// glCreateProgram();
+    //glProgramParameteri(
+    //    m_program,
+    //    GL_PROGRAM_SEPARABLE, /* Programs are separable, defining a custom pipeline */
+    //    GL_TRUE
+    //);
+    //glAttachShader(m_program, shader);
 
-    glLinkProgram(m_program);
-    glGetProgramiv(m_program, GL_LINK_STATUS, &result);
+    //glLinkProgram(m_program);
+    //glGetProgramiv(m_program, GL_LINK_STATUS, &result);
     if (result == GL_FALSE)  {
      
         GLint error_len = 0;
-        glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &error_len);
+        //glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &error_len);
     
         // The maxLength includes the NULL character
         utils::buffer<GLchar> error_buffer = utils::buffer<GLchar>(error_len);
-        glGetShaderInfoLog(shader, error_len, &error_len, error_buffer);
+        //glGetShaderInfoLog(shader, error_len, &error_len, error_buffer);
 
         std::cerr << "[ERROR] In file " << path << ":\n";
         std::cerr << "  " << error_buffer << std::endl;
-        glDeleteShader(shader);
+        //glDeleteShader(shader);
         throw runtime_error("Shader linking error"); 
     }   
 
     /* Clean up */
-    glDetachShader(m_program, shader);
-    glDeleteShader(shader);
+    //glDetachShader(m_program, shader);
+    //glDeleteShader(shader);
 }
 
 shader_stage::shader_stage(const std::string_view& shader_source, GLenum type)
     : m_type_bitmask(0) {
 
-    GLint result = GL_FALSE;
+    GLint result = GL_TRUE;
 
     /* Generate type */
     switch (type) {
@@ -136,114 +136,114 @@ shader_stage::shader_stage(const std::string_view& shader_source, GLenum type)
     }
     
 	/* Compile */
-	GLenum shader = glCreateShader(static_cast<GLenum>(type));
+	GLenum shader = 0;//glCreateShader(static_cast<GLenum>(type));
     const char *src = shader_source.begin();
 
-	glShaderSource(shader, 1, &src, nullptr);
-    glCompileShader(shader);
+	//glShaderSource(shader, 1, &src, nullptr);
+    //glCompileShader(shader);
 
-    glGetShaderiv(shader, GL_COMPILE_STATUS, &result);
+    //glGetShaderiv(shader, GL_COMPILE_STATUS, &result);
     if (result == GL_FALSE)  {
      
         GLint error_len = 0;
-        glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &error_len);
+      //  glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &error_len);
     
         // The maxLength includes the NULL character
         utils::buffer<GLchar> error_buffer = utils::buffer<GLchar>(error_len);
-        glGetShaderInfoLog(shader, error_len, &error_len, error_buffer);
+        //glGetShaderInfoLog(shader, error_len, &error_len, error_buffer);
 
         std::cerr << "[ERROR] ";
         std::cerr << "  " << error_buffer << std::endl;
 
-        glDeleteShader(shader);
+        //glDeleteShader(shader);
         throw runtime_error("Shader compilation error"); 
     }
     /* Compilation successful, link shader */
-    m_program = glCreateProgram();
-    glProgramParameteri(
-        m_program,
-        GL_PROGRAM_SEPARABLE, /* Programs are separable, defining a custom pipeline */
-        GL_TRUE
-    );
-    glAttachShader(m_program, shader);
+    m_program = 0;//glCreateProgram();
+    //glProgramParameteri(
+    //    m_program,
+    //    GL_PROGRAM_SEPARABLE, /* Programs are separable, defining a custom pipeline */
+    //    GL_TRUE
+    //);
+    //glAttachShader(m_program, shader);
 
-    glLinkProgram(m_program);
-    glGetProgramiv(m_program, GL_LINK_STATUS, &result);
+    //glLinkProgram(m_program);
+    //glGetProgramiv(m_program, GL_LINK_STATUS, &result);
     if (result == GL_FALSE)  {
      
         GLint error_len = 0;
-        glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &error_len);
+    //    glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &error_len);
     
         // The maxLength includes the NULL character
         utils::buffer<GLchar> error_buffer = utils::buffer<GLchar>(error_len);
-        glGetShaderInfoLog(shader, error_len, &error_len, error_buffer);
+    //    glGetShaderInfoLog(shader, error_len, &error_len, error_buffer);
 
         std::cerr << "[ERROR] ";
         std::cerr << "  " << error_buffer << std::endl;
-        glDeleteShader(shader);
+    //    glDeleteShader(shader);
         throw runtime_error("Shader linking error"); 
     }   
 
     /* Clean up */
-    glDetachShader(m_program, shader);
-    glDeleteShader(shader);
+    //glDetachShader(m_program, shader);
+    //glDeleteShader(shader);
 }
 
 shader_stage::~shader_stage() {
 
-    glDeleteProgram(m_program);
+    //glDeleteProgram(m_program);
 }
 
 /* Uniform setters - there is a lot of them*/
 template <> void shader_stage::m_set_uniform_value<int>(GLint location, const int& val) {
-    glProgramUniform1i(m_program, location, val);
+    //glProgramUniform1i(m_program, location, val);
 }
 
 template <> void shader_stage::m_set_uniform_value<uint>(GLint location, const uint& val) {
-    glProgramUniform1ui(m_program, location, val);
+    //glProgramUniform1ui(m_program, location, val);
 }
 
 template <> void shader_stage::m_set_uniform_value<float>(GLint location, const float& val) {
-    glProgramUniform1f(m_program, location, val);
+    //glProgramUniform1f(m_program, location, val);
 }
 
 template <> void shader_stage::m_set_uniform_value<bool>(GLint location, const bool& val) {
-    glProgramUniform1i(m_program, location, val);
+    //glProgramUniform1i(m_program, location, val);
 }
 
 template <> void shader_stage::m_set_uniform_value<ivec2>(GLint location, const ivec2& val) { 
-    glProgramUniform2iv(m_program, location, 1, value_ptr(val)); 
+    //glProgramUniform2iv(m_program, location, 1, value_ptr(val)); 
 }
 
 template <> void shader_stage::m_set_uniform_value<vec2>(GLint location, const vec2& val) {
-    glProgramUniform2fv(m_program, location, 1, value_ptr(val));
+    //glProgramUniform2fv(m_program, location, 1, value_ptr(val));
 }
 
 template <> void shader_stage::m_set_uniform_value<mat2x2>(GLint location, const mat2x2& val) {
-    glProgramUniformMatrix2fv(m_program, location, 1, GL_FALSE, value_ptr(val));
+    //glProgramUniformMatrix2fv(m_program, location, 1, GL_FALSE, value_ptr(val));
 }
 
 template <> void shader_stage::m_set_uniform_value<ivec3>(GLint location, const ivec3& val) {
-    glProgramUniform3iv(m_program, location, 1,  value_ptr(val));
+    //glProgramUniform3iv(m_program, location, 1,  value_ptr(val));
 }
 
 template <> void shader_stage::m_set_uniform_value<vec3>(GLint location, const vec3& val) {
-    glProgramUniform3fv(m_program, location, 1,  value_ptr(val));
+    //glProgramUniform3fv(m_program, location, 1,  value_ptr(val));
 }
 
 template <> void shader_stage::m_set_uniform_value<mat3x3>(GLint location, const mat3x3& val) {
 
-    glProgramUniformMatrix3fv(m_program, location, 1, GL_FALSE, value_ptr(val));
+    //glProgramUniformMatrix3fv(m_program, location, 1, GL_FALSE, value_ptr(val));
 }
 
 template <> void shader_stage::m_set_uniform_value<ivec4>(GLint location, const ivec4& val) {
-    glProgramUniform2iv(m_program, location, 1, value_ptr(val));
+    //glProgramUniform2iv(m_program, location, 1, value_ptr(val));
 }
 
 template <> void shader_stage::m_set_uniform_value<vec4>(GLint location, const vec4& val) {
-    glProgramUniform4fv(m_program, location, 1, value_ptr(val));
+    //glProgramUniform4fv(m_program, location, 1, value_ptr(val));
 }
 
 template <> void shader_stage::m_set_uniform_value<mat4x4>(GLint location, const mat4x4& val) {
-    glProgramUniformMatrix4fv(m_program, location, 1, GL_FALSE, value_ptr(val));
+    //glProgramUniformMatrix4fv(m_program, location, 1, GL_FALSE, value_ptr(val));
 }

@@ -11,14 +11,14 @@ using namespace utils;
 gpu_allocator::gpu_allocator(size_t base_size, GLbitfield buffer_hints) 
     : m_buffer_size(base_size), m_buffer_hints(buffer_hints) {
 
-    glCreateBuffers(1, &m_buffer);
-    glNamedBufferStorage(m_buffer, base_size, nullptr, GL_DYNAMIC_STORAGE_BIT); 
+    //glCreateBuffers(1, &m_buffer);
+    //glNamedBufferStorage(m_buffer, base_size, nullptr, GL_DYNAMIC_STORAGE_BIT); 
     m_chunks.emplace_front(base_size, 0, false); /* Insert root chunk */
 }
 
 gpu_allocator::~gpu_allocator() {
 
-    glDeleteBuffers(1, &m_buffer);
+    //glDeleteBuffers(1, &m_buffer);
 }
 
 pair<gpu_allocator::handle, size_t> gpu_allocator::alloc_buffer(size_t size) {
@@ -63,7 +63,7 @@ size_t gpu_allocator::buffer_data(const gpu_allocator::handle& handle, size_t da
         std::cerr << "[WARNING] Requesting to write " << data_size << " bytes to a buffer of size " << handle->chunk_size
                      << ". Only " << size_to_write << " bytes will be written" << std::endl; 
 
-    glNamedBufferSubData(m_buffer, handle->offset, size_to_write, data);
+    //glNamedBufferSubData(m_buffer, handle->offset, size_to_write, data);
     return size_to_write;    
 }
 
@@ -101,7 +101,7 @@ void gpu_allocator::free_all_and_resize(size_t new_size) {
 
 
     m_buffer_size = new_size;
-    glNamedBufferStorage(m_buffer, new_size, nullptr, m_buffer_hints); 
+    //glNamedBufferStorage(m_buffer, new_size, nullptr, m_buffer_hints); 
 
     m_chunks.clear();
     m_chunks.emplace_front(new_size, 0, false);

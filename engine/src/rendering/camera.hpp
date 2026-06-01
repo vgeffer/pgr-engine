@@ -4,7 +4,6 @@
 ///
 #pragma once
 #include <glm/glm.hpp>
-#include "../../lib/glad/glad.h"
 #include "../scene/scene_node.hpp"
 
 

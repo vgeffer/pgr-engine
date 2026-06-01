@@ -3,7 +3,6 @@
 /// @author geffevil
 ///
 #pragma once
-#include "../../lib/glad/glad.h"
 #include "material.hpp"
 #include <glm/glm.hpp>
 #include <memory>
@@ -29,23 +28,23 @@ namespace rendering {
 
             /* Renderer manages drawing */
             virtual ~mesh();
-            inline GLuint mode() const { return m_draw_mode; }
-            inline GLuint indexed() const { return m_indexed; }
-            inline GLuint element_count() const { return m_element_count; }
-            inline GLuint first_vertex() const { return m_first_vertex; }
-            inline GLuint first_index() const { return m_first_index; }
+            inline uint mode() const { return m_draw_mode; }
+            inline uint indexed() const { return m_indexed; }
+            inline uint element_count() const { return m_element_count; }
+            inline uint first_vertex() const { return m_first_vertex; }
+            inline uint first_index() const { return m_first_index; }
 
         protected: 
             explicit mesh(); 
 
-            GLuint m_draw_mode; /* GL_LINES/GL_STRIP, etc... */
+            uint m_draw_mode; /* GL_LINES/GL_STRIP, etc... */
             bool m_indexed;
-            GLuint m_element_count;
+            uint m_element_count;
 
             utils::gpu_allocator::handle m_vert_handle;
             utils::gpu_allocator::handle m_elem_handle;
-            GLuint m_first_vertex;
-            GLuint m_first_index;
+            uint m_first_vertex;
+            uint m_first_index;
     };
     
     class mesh_instance : public scene::node_component {

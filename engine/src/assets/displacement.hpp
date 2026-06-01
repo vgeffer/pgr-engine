@@ -3,7 +3,6 @@
 /// @author geffevil
 ///
 #pragma once
-#include "../../lib/glad/glad.h"
 #include "../rendering/mesh.hpp"
 #include "asset.hpp"
 #include <glm/ext/vector_float3.hpp>

@@ -1,5 +1,4 @@
 #pragma once
-#include "resource.hpp"
 #include <set>
 #include <unordered_map>
 #include <vulkan/vulkan.hpp>
@@ -9,26 +8,22 @@
 
 #define FIELD(field_type, field)                  \
     public:                                       \
-        static inline const field_type& field() { \
+        static inline const field_type& field() noexcept { \
             assert(s_instance != nullptr);        \
             return s_instance->m_##field;         \
         }                                         \
     private:                                      \
         field_type m_##field;
 
-namespace utils {
-    
-    /// @todo [Long-Term]: Reflection-based loader
-    class project_settings {
+namespace pgreng::app {
+
+    class app_config {
         public:
 
-            project_settings();
+            app_config() = default;
             void init(std::string path);
 
             FIELD(std::string, project_name);
-            FIELD(size_t, gpu_geometry_buffer_alloc_size);
-            FIELD(size_t, gpu_material_buffer_alloc_size);
-            FIELD(size_t, gpu_textures_buffer_alloc_size);
             
             FIELD(float, physics_interval);
             FIELD(std::string, default_scene_path);
@@ -45,9 +40,6 @@ namespace utils {
             #undef uomap
             
         private:
-            inline static project_settings* s_instance = nullptr;
+            inline static app_config* s_instance = nullptr;
     };
 }
-    
-    
-    

@@ -1,31 +1,27 @@
 # pgr-engine
 
-This repository contains an implementation of a semestral assignment from the PGR (Computer Graphics) course at FEE CTU. 
+This repository contains an implementation of a semestral assignment from the PGR (Computer Graphics) course at FEE CTU.
 
 
-> [!WARNING] 
+> [!WARNING]
 > This software is under active development.
 
 > [!WARNING]
 > This project uses GL_ARB_bindless_texture extension. This may not be supported on all devices. See [compatibility chart](https://opengl.gpuinfo.org/listreports.php?extension=GL_ARB_bindless_texture).
 
-### Runtime dependencies 
+### Runtime dependencies
 - ```glm``` >= 1.0.0
 - ```glfw``` >= 3.3
-- ```opengl``` >= 4.6 *(glad loader is provided with the project)*
+- ```opengl``` >= 4.6 (*glad loader is provided with the project*)
 - ```assimp``` >= 5.4
 
 ### Build dependencies
-- ```premake5``` >= 5.0.0
+- ```cmake``` >= 3.30.0
 - ```doxygen``` >= 1.13 (*optional, for generating docs*)
-- C++ compiler with at least **C++17** support 
+- C++ compiler with at least **C++17** support
 
 ### Building
-This build project uses **premake5** build system. To generate build files, run:
-``` 
-    premake5 [target]
-```
-in the project's root directory. A list of targets can be found by running ```premake5 --help```. All the build files will be generated in the **build** directory. To build the project, follow the instructions of the chosen target build system.
+This build project uses **cmake** build system.
 
 ## Acknowledgements
 This project uses and redistributes [```stb_image.h```](https://github.com/nothings/stb/blob/master/stb_image.h), a part of the [stb libraries](https://github.com/nothings/stb/) <br />

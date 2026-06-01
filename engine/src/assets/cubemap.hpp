@@ -3,7 +3,6 @@
 /// @author geffevil
 ///
 #pragma once
-#include "../../lib/glad/glad.h"
 #include "asset.hpp"
 #include <glm/glm.hpp>
 #include <string>
@@ -32,10 +31,10 @@ namespace assets {
             inline std::pair<glm::ivec2, int> texture_params() const { return std::make_pair(glm::ivec2(m_w, m_h), m_channels); }
 
             /// @brief Getter for the OpenGL texture object
-            GLuint cubemap_object () const { return m_cubemap_obj; } 
+            uint cubemap_object () const { return m_cubemap_obj; } 
 
         private:
-            GLuint m_cubemap_obj;   ///< OpenGL texture object for the cubemap                   
+            uint m_cubemap_obj;   ///< OpenGL texture object for the cubemap                   
             int m_w,                ///< Single texture's width
                 m_h,                ///< Single texture's height                        
                 m_channels;         ///< Number of channels in a single texture                       

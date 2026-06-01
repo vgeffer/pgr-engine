@@ -1,8 +1,6 @@
-#include "project_settings.hpp"
+#include "app_config.hpp"
 #include "../utils/resource.hpp"
-#include "vulkan/vulkan.hpp"
-#include "vulkan/vulkan_core.h"
-#include <cctype>
+#include <vulkan/vulkan.hpp>
 #include <set>
 #include <string>
 #include <unordered_map>
@@ -15,24 +13,18 @@
     if (!isdigit(str_##field.back()))                            \
         field *= UNIT_MAP.at(str_##field.back());
 
-
+using namespace std;
+using namespace pgreng::app;
 using namespace utils;
 
-const std::unordered_map<char, uint> UNIT_MAP = {
+const unordered_map<char, uint> UNIT_MAP = {
     { 'k', 1024 },
     { 'M', 1024 * 1024 },
     { 'G', 1024 * 1024 * 1024 }
 };
 
-project_settings::project_settings() {
+void app_config::init(std::string path) {
 
-    s_instance = nullptr;
-}
-
-void project_settings::init(std::string path) {
-    using namespace std;
-
-    s_instance = this;
     resource setting_resx = resource(path);
 
     /* Init EVERYTHING */
@@ -47,11 +39,7 @@ void project_settings::init(std::string path) {
                         .setApplicationVersion(VK_MAKE_VERSION(1, 0, 0))
                         .setEngineVersion(VK_MAKE_VERSION(1, 0, 0))
                         .setApiVersion(VK_API_VERSION_1_1);
-    m_vk_required_extensions = setting_resx.deserialize<std::vector<std::string>>("project/vk/required_extensions");
-    m_vk_required_features = setting_resx.deserialize<std::set<std::string>>("project/vk/required_features");
-    m_vk_optional_features = setting_resx.deserialize<std::unordered_map<string, int>>("project/vk/optional_features");
-
-    PARSE_NUMERIC_SIZE(m_gpu_geometry_buffer_alloc_size, "project/ogl/gpu_geometry_buffer_alloc_size")
-    PARSE_NUMERIC_SIZE(m_gpu_material_buffer_alloc_size, "project/ogl/gpu_material_buffer_alloc_size")
-    PARSE_NUMERIC_SIZE(m_gpu_textures_buffer_alloc_size, "project/ogl/gpu_textures_buffer_alloc_size")
+    m_vk_required_extensions = setting_resx.deserialize<vector<string>>("project/vk/required_extensions");
+    m_vk_required_features = setting_resx.deserialize<set<string>>("project/vk/required_features");
+    m_vk_optional_features = setting_resx.deserialize<unordered_map<string, int>>("project/vk/optional_features");
 }

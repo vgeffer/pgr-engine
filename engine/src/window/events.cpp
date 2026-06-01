@@ -1,6 +1,6 @@
 #include "events.hpp"
-#include "game_window.hpp"
-#include "window/key_code.hpp"
+#include "../game_window.hpp"
+#include "key_code.hpp"
 #include <GLFW/glfw3.h>
 #include <glm/fwd.hpp>
 #include <cstdint>
@@ -8,6 +8,7 @@
 #include <stdexcept>
     
 using namespace std;
+using namespace pgreng::window;
 
 
 events::events() 
