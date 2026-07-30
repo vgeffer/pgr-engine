@@ -15,18 +15,21 @@ set(SOURCES
 )
 
 add_library(pgr_vulkan_backend SHARED 
-
+    "backend.cpp"
+    "device_features.hpp"
+    "vulkan_backend.hpp"
+    "structs.hpp"
+    "window.cpp"
+    "presentation.hpp"
+    "device.cpp"
+    "gpu_memory.cpp"
+    "graphics.cpp"
+    "presentation.cpp"
+    "device.hpp"
+    "gpu_memory.hpp"
+    "device_features.cpp"
+    "vulkan_backend.cpp"
 )
-add_library(pgr_vulkan_backend_static STATIC 
-
-)
-
-target_link_libraries(pgr_vulkan_backend Vulkan::Vulkan glfw3)
+target_link_libraries(pgr_vulkan_backend Vulkan::Vulkan glfw)
 target_compile_definitions(pgr_vulkan_backend PRIVATE PGR_EXPORT)
-include_directories(pgr_vulkan_backend_static ${PROJECT_SOURCE_DIR}/engine)
-
-target_link_libraries(pgr_vulkan_backend Vulkan::Vulkan glfw3)
-target_compile_definitions(pgr_vulkan_backend_static PRIVATE PGR_EXPORT STATIC)
-include_directories(pgr_vulkan_backend_static ${PROJECT_SOURCE_DIR}/engine)
-
-# find ../engine/engine/backends/desktop/vulkan -name '*.cpp' | cut -c 42- | sed -e 's/.*/"&"/' >> ../engine/engine/backends/desktop/vulkan/CMakeLists.txt && find ../engine/engine/backends/desktop/vulkan -name '*.hpp' | cut -c 42- | sed -e 's/.*/"&"/' >> ../engine/engine/backends/desktop/vulkan/CMakeLists.txt
+include_directories(pgr_vulkan_backend ${PROJECT_SOURCE_DIR}/engine)

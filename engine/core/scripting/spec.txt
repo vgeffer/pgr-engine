@@ -1,0 +1,38 @@
+
+
+- tag at the start @resource, @script, @builder, @editor
+- multi: let it be procedural and functional
+- lets user insert code into build system
+- interpretor + compilation
+- strict order + lisp-style macros
+- strict typing
+- first class function
+- oop
+- function resolution through function hashes
+
+@script: param1, param2, param3
+
+def asd: type
+def efg: func(arg1: type, arg2: type, arg3: type -> none)
+
+asd = 231
+
+
+@resource(template)
+@resource-template: name
+@script
+@builder(metadata): name
+@editor: name
+
+
+
+<START> := @<start tag> <statement>
+<start tag> := <resource tag> | <resource template tag> | <script tag> | <builder tag> | <editor tag>
+<statement> := <definition> | 
+
+# tags
+<resource tag> := resource([identifier])
+<resource template tag> := resource-template: [identifier]
+<script tag> := script
+<builder tag> := builder(...): [identifier]
+<editor tag> := editor: [identifier]
