@@ -33,3 +33,7 @@
 
 # Build directory
 build/
+
+# Caches and weird MacOS files
+.DS_Store
+.cache/
