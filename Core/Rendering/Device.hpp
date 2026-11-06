@@ -1,7 +1,7 @@
 #pragma once
 #include "Core/Memory/GpuMemory.hpp"
 #include "Core/Presentation/Window.hpp"
-#include "vulkan/vulkan.hpp"
+
 #include <optional>
 #include <vulkan/vulkan.hpp>
 #include <Common/Common.hpp>
@@ -23,7 +23,7 @@ namespace pgr::Core::Rendering {
             Device() = default;
 
             static std::vector<PhysDevice> EnumerateAvailable(const vk::Instance& instance, const Presentation::Window& window); 
-            static inline Device Select(const PhysDevice& device) { return Device(device); }
+            static inline Device Select(const vk::Instance& instance, const PhysDevice& device) { return Device(instance, device); }
             
             inline void WaitToFinish() const { mDevice.waitIdle(); }
 
@@ -41,18 +41,18 @@ namespace pgr::Core::Rendering {
 
 
         private:
-            Device(PhysDevice deice);
+            Device(const vk::Instance& instance, const PhysDevice& deice);
 
         private:
-            Memory::GpuMemory  mDeviceAllocator;
-            vk::PhysicalDevice mPhysDevice = nullptr;
-            vk::Device         mDevice = nullptr;
+            Memory::GpuMemory  mDeviceAllocator = nullptr;
+            vk::PhysicalDevice mPhysDevice      = nullptr;
+            vk::Device         mDevice          = nullptr;
 
             uint32_t  mGraphicsQueueFamily;
             vk::Queue mGraphicsQueue = nullptr;
 
             uint32_t  mPresentQueueFamily;
-            vk::Queue mPresentQueue = nullptr;
+            vk::Queue mPresentQueue  = nullptr;
 
 
 

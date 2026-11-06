@@ -9,7 +9,7 @@
 
 using namespace pgr::Core::Rendering;
 
-Device::Device(PhysDevice device) : mDeviceAllocator(device.DeviceHandle) {
+Device::Device(const vk::Instance& instance, const PhysDevice& device) {
   
     assert(device.IsComplete());
     float queuePriority = 1.0f;
@@ -38,6 +38,7 @@ Device::Device(PhysDevice device) : mDeviceAllocator(device.DeviceHandle) {
         
     mDevice = device.DeviceHandle.createDevice(devInfo);
     mPhysDevice = device.DeviceHandle;
+    mDeviceAllocator = Memory::GpuMemory(instance, mDevice, mPhysDevice);
 
     mGraphicsQueueFamily = device.GraphicsQueueFamily.value();
     mGraphicsQueue = mDevice.getQueue(device.GraphicsQueueFamily.value(), 0);

@@ -16,8 +16,8 @@ using App = pgr::App::Application;
 Renderer::Renderer(const Presentation::Window& target) : mSwapChain(target) {
 
     /* For now, so it works */
-    Assets::ShaderModule vertModule = Assets::ShaderModule("sample.vert.spv");
-    Assets::ShaderModule fragModule = Assets::ShaderModule("sample.frag.spv");
+    Assets::ShaderModule vertModule = Assets::ShaderModule("Assets/Shaders/sample.vert.spv");
+    Assets::ShaderModule fragModule = Assets::ShaderModule("Assets/Shaders/sample.frag.spv");
 
     vk::PipelineShaderStageCreateInfo vertStageInfo = vk::PipelineShaderStageCreateInfo()
         .setStage(vk::ShaderStageFlagBits::eVertex)

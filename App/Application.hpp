@@ -10,7 +10,7 @@
 ///
 
 #pragma once
-
+#include <cassert>
 #include <vulkan/vulkan.hpp>
 
 #include <Common/Common.hpp>

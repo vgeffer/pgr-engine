@@ -18,7 +18,7 @@ ShaderModule::ShaderModule(const char* modulePath) {
     std::ifstream moduleSourceStream = std::ifstream(modulePath, std::ios::in | std::ios::binary);
 
     if (!moduleSourceStream.is_open())
-        throw std::runtime_error("Unable to open shader file " + std::string(modulePath));
+        throw Common::Exceptions::IOError("Unable to open shader file " + std::string(modulePath));
     
     std::vector<char> moduleSource = std::vector<char>(
         std::istreambuf_iterator<char>(moduleSourceStream), 
@@ -26,7 +26,7 @@ ShaderModule::ShaderModule(const char* modulePath) {
     );
 
     if (!moduleSourceStream.eof() && moduleSourceStream.fail())        
-		throw std::runtime_error("Unable to read from shader file " + std::string(modulePath));
+		throw Common::Exceptions::IOError("Unable to read from shader file " + std::string(modulePath));
 
     moduleSourceStream.close();
 
@@ -38,7 +38,6 @@ ShaderModule::ShaderModule(const char* modulePath) {
         .setPCode(reinterpret_cast<const uint32_t*>(moduleSource.data()));
 
     mModule = static_cast<vk::Device>(::App::UsedDevice()).createShaderModule(moduleInfo);
-
 }
 
 ShaderModule::~ShaderModule() {

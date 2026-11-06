@@ -82,15 +82,9 @@ target_link_libraries(engine
     glm::glm-header-only 
     nlohmann_json::nlohmann_json
     Vulkan::Vulkan 
-    VulkanMemoryAllocator-Hpp::VulkanMemoryAllocator-Hpp nlohmann_json::nlohmann_json
+    VulkanMemoryAllocator-Hpp::VulkanMemoryAllocator-Hpp
 )
 
 add_library(PgrEngine::Engine ALIAS engine)
 target_include_directories(engine PRIVATE ${PROJECT_SOURCE_DIR})
 target_compile_definitions(engine PRIVATE PGR_EXPORT)
-
-
-
-
-
-

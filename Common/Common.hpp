@@ -20,5 +20,5 @@ namespace pgr::Common {
             const uint16_t Minor;
             const uint16_t Patch;
         } Version;
-    } EngineInfo { "PgrEngine", { 1, 0, 0 }};
+    } EngineInfo { "PgrEngine", { 0, 1, 0 } };
 }

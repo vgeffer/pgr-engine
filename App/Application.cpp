@@ -35,7 +35,7 @@ Application::Application(const AppManifest& manifest) {
         mManifest = new AppManifest{};
         std::memcpy(mManifest, &manifest, sizeof(AppManifest)); //TODO: Memory mannager
 
-        mManifest->Flags.ManualDeviceSelection &= Debug::VulkanValidation::IsAvailable(); /* TODO: Notify user Disable validations if not available */
+        mManifest->Flags.UseValidations &= Debug::VulkanValidation::IsAvailable(); /* TODO: Notify user Disable validations if not available */
 
         /* Extensions - autoregister window */
         std::vector<const char*> usedExtensions = Core::Presentation::Window::RequiredVkExtensions(),
@@ -88,8 +88,6 @@ Application::Status Application::Start() {
     
     Application::Status ret = eOk;
 
-
-
     Core::Presentation::VideoMode mode = Core::Presentation::VideoMode();
     Core::Presentation::Window window = Core::Presentation::Window(mVkInstance, "Title", mode);
     
@@ -116,10 +114,10 @@ Application::Status Application::Start() {
             window.Destroy(mVkInstance);
             throw std::runtime_error("Device index out of range!");
         }
-        mUsedDevice = Core::Rendering::Device::Select(devices[devID - 1]);
+        mUsedDevice = Core::Rendering::Device::Select(mVkInstance, devices[devID - 1]);
 
     }
-    else mUsedDevice = Core::Rendering::Device::Select(devices[0]);
+    else mUsedDevice = Core::Rendering::Device::Select(mVkInstance, devices[0]);
 
 
     while (true) {
@@ -162,8 +160,8 @@ Application::Status Application::Start() {
             if (mUsedDevice.SupportsPresentation(window)) { /* destroy old window */ continue; }
             ret = eAppReload;
         }
-        catch (Common::Exceptions::AppReloadMesage)     { ret = eAppReload; /* Go through usual cleanup */ }
-        catch (const std::runtime_error& e)             { /*debug::error << e.what() << std::endl; */ ret = eError; }
+        catch (Common::Exceptions::AppReloadMesage) { ret = eAppReload; /* Go through usual cleanup */ }
+        catch (const std::runtime_error& e)         { std::cerr << e.what() << std::endl; ret = eError; }
         /* Do not catch std::logic_errors, those should crash the app directly */
 
         /* Cleanup */
