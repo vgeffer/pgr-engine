@@ -56,7 +56,7 @@ Renderer::Renderer(const Presentation::Window& target) : mSwapChain(target) {
         .setMinDepth(0.0f).setMaxDepth(1.0f);
 
     vk::Rect2D scissor = vk::Rect2D()
-        .setOffset((vk::Offset2D) { 0,  0})
+        .setOffset(vk::Offset2D { 0,  0 })
         .setExtent(fbSize);
 
 
@@ -183,7 +183,7 @@ Renderer::Renderer(const Presentation::Window& target) : mSwapChain(target) {
     vk::FenceCreateInfo fenceInfo = vk::FenceCreateInfo()
         .setFlags(vk::FenceCreateFlagBits::eSignaled);
     mFrameDrawnFence = static_cast<vk::Device>(::App::UsedDevice()).createFence(fenceInfo);
-    mRenderingDoneSemaphore = static_cast<vk::Device>(::App::UsedDevice()).createSemaphore((vk::SemaphoreCreateInfo) {});
+    mRenderingDoneSemaphore = static_cast<vk::Device>(::App::UsedDevice()).createSemaphore(vk::SemaphoreCreateInfo {});
 }
 
 Renderer::~Renderer() {
@@ -221,7 +221,7 @@ void Renderer::Dispatch() {
     vk::RenderPassBeginInfo passBeginInfo = vk::RenderPassBeginInfo()
         .setRenderPass(mRenderPass)
         .setFramebuffer(mFrameBuffers[usedFramebuffer])
-        .setRenderArea((vk::Rect2D) { (vk::Offset2D) {0, 0}, mSwapChain.FrameBufferSize() })
+        .setRenderArea(vk::Rect2D{ vk::Offset2D { 0, 0 }, mSwapChain.FrameBufferSize() })
         .setClearValueCount(1)
         .setPClearValues(&clearColor);
 

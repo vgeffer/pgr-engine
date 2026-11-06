@@ -72,7 +72,6 @@ add_library(engine SHARED
     "Core/Presentation/SwapChain.hpp"
     "Core/Presentation/Window.hpp"
     "Core/Presentation/SwapChain.cpp"
-    "Core/Presentation/KeyCode.hpp"
     "Core/Debug/VulkanValidation.cpp"
     "Core/Debug/VulkanValidation.hpp"
 

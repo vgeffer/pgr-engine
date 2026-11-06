@@ -11,12 +11,11 @@
 #include <vector>
 #include <vulkan/vulkan.hpp>
 #include <GLFW/glfw3.h>
-#include <Core/Presentation/KeyCode.hpp>
 
 namespace pgr::Core::Presentation {
     struct VideoMode {
     
-        enum class WindowMode { WINDOW, BORDERLESS, FULLSCREEN };
+        enum class WindowMode { eWindowed, eBorderless, eFullscreen };
             
         constexpr inline VideoMode& setWidth(uint32_t width) noexcept { Width = width; return *this; }
         constexpr inline VideoMode& setHeight(uint32_t height) noexcept { Height = height; return *this; }
@@ -38,8 +37,8 @@ namespace pgr::Core::Presentation {
             operator vk::SurfaceKHR() const noexcept { return mVkSurface; }    
             
             static std::vector<const char*> RequiredVkExtensions();
-            const cursor_state& Cursor(const cursor_state& state);
-            const cursor_state& Cursor() const { return mCursorState; } 
+            //const cursor_state& Cursor(const cursor_state& state);
+            //const cursor_state& Cursor() const { return mCursorState; } 
             inline bool IsClosing() const { return glfwWindowShouldClose(mWindowHandle); } 
             void swap();
 
@@ -48,6 +47,6 @@ namespace pgr::Core::Presentation {
         private:
             GLFWwindow*     mWindowHandle = nullptr;   ///< Handle of the underlying GLFW object                           
             vk::SurfaceKHR  mVkSurface = nullptr;
-            cursor_state    mCursorState; ///< Current cursor state
+            //cursor_state    mCursorState; ///< Current cursor state
     };
 }

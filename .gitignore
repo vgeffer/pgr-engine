@@ -33,6 +33,8 @@
 
 # Build directory
 build/
+.cahce
+.vs
 
 # Caches and weird MacOS files
 .DS_Store

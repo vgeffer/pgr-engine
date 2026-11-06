@@ -54,7 +54,7 @@ std::vector<PhysDevice> Device::EnumerateAvailable(const vk::Instance& instance,
     /* TODO: Move out to separate function */
     for (const auto& vkDev : instanceDevices) {
     
-        PhysDevice dev { .DeviceHandle = vkDev, .Score = 0 };
+        PhysDevice dev { vkDev, 0 };
 
         vk::PhysicalDeviceProperties           props      = vkDev.getProperties();
         vk::PhysicalDeviceFeatures             feats      = vkDev.getFeatures();

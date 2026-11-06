@@ -18,8 +18,8 @@ Window::Window(const vk::Instance& instance, const std::string& title, const Vid
         throw std::runtime_error("Unable to retrieve GLFW video mode");
 
     /* Resolve VidMode params */
-    vk::Extent2D size = videoMode.Mode == VideoMode::WindowMode::BORDERLESS ? vk::Extent2D(glfw_vidmode->width, glfw_vidmode->height) : 
-                                                                              vk::Extent2D(videoMode.Width, videoMode.Width);
+    vk::Extent2D size = videoMode.Mode == VideoMode::WindowMode::eBorderless ? vk::Extent2D(glfw_vidmode->width, glfw_vidmode->height) : 
+                                                                               vk::Extent2D(videoMode.Width, videoMode.Width);
     
     glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
     glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
@@ -28,7 +28,7 @@ Window::Window(const vk::Instance& instance, const std::string& title, const Vid
         800,//size.x,
         600, //size.y,
         title.c_str(),
-        videoMode.Mode != VideoMode::WindowMode::WINDOW ? glfwGetPrimaryMonitor() : NULL,
+        videoMode.Mode != VideoMode::WindowMode::eWindowed ? glfwGetPrimaryMonitor() : NULL,
         nullptr
     );
 
@@ -85,10 +85,10 @@ std::vector<const char*> Window::RequiredVkExtensions() {
     return out;
 }
 
-const cursor_state& Window::Cursor(const cursor_state& state) {
-    glfwSetInputMode(mWindowHandle, GLFW_CURSOR, static_cast<int>(state));
-    return mCursorState = state;
-}
+//const cursor_state& Window::Cursor(const cursor_state& state) {
+//    glfwSetInputMode(mWindowHandle, GLFW_CURSOR, static_cast<int>(state));
+//    return mCursorState = state;
+//}
 
 std::pair<uint32_t, uint32_t> Window::Size() const {
 

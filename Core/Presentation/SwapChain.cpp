@@ -45,7 +45,7 @@ bool SwapChain::IsSupportedByDevice(const Rendering::PhysDevice& dev) {
 }
 
 SwapChain::SwapChain(const Window& window) {
-    const vk::PhysicalDevice physDev = static_cast<const vk::PhysicalDevice&>(::App::UsedDevice());
+    const vk::PhysicalDevice physDev = static_cast<vk::PhysicalDevice>(::App::UsedDevice());
     const vk::SurfaceCapabilitiesKHR surfaceCapabilities = physDev.getSurfaceCapabilitiesKHR(window);
     
     /* Query surface properties */
@@ -54,7 +54,7 @@ SwapChain::SwapChain(const Window& window) {
 
     /* Query window size and clamp if necesseary*/
     const auto winSize = window.Size();
-    mImageSize = (vk::Extent2D){ 
+    mImageSize = vk::Extent2D { 
         std::clamp(winSize.first, surfaceCapabilities.minImageExtent.width, surfaceCapabilities.maxImageExtent.width),
         std::clamp(winSize.second, surfaceCapabilities.minImageExtent.height, surfaceCapabilities.maxImageExtent.height)
     };
@@ -99,16 +99,16 @@ SwapChain::SwapChain(const Window& window) {
             .setImage(image)
             .setFormat(surfaceFormat.format)
             .setViewType(vk::ImageViewType::e2D)
-            .setComponents((vk::ComponentMapping) {
+            .setComponents(vk::ComponentMapping {
                 vk::ComponentSwizzle::eIdentity, vk::ComponentSwizzle::eIdentity, 
                 vk::ComponentSwizzle::eIdentity, vk::ComponentSwizzle::eIdentity})
-            .setSubresourceRange((vk::ImageSubresourceRange) {vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1});
+            .setSubresourceRange(vk::ImageSubresourceRange { vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1 });
 
         vk::ImageView view = static_cast<vk::Device>(::App::UsedDevice()).createImageView(viewInfo);
         mSwapChainImageViews.emplace_back(view);
     }
 
-    mRequestImageSemaphore = static_cast<vk::Device>(::App::UsedDevice()).createSemaphore((vk::SemaphoreCreateInfo){});
+    mRequestImageSemaphore = static_cast<vk::Device>(::App::UsedDevice()).createSemaphore(vk::SemaphoreCreateInfo {});
 }
 
 SwapChain::~SwapChain() {
