@@ -4,12 +4,10 @@
 ///
 #pragma once
 
-#include "App/AppManifest.hpp"
 #include "vulkan/vulkan.hpp"
 #include <Core/Rendering/Device.hpp>
 #include <Core/Presentation/SwapChain.hpp>
 #include <Core/Presentation/Window.hpp>
-#include <optional>
 #include <vector>
 
 namespace pgr::Core::Rendering {
@@ -23,10 +21,7 @@ namespace pgr::Core::Rendering {
             ~Renderer();
 
             /// @brief Draws the scene
-            void RequestFrame();
-
             void Dispatch();
-
 
 
         private:

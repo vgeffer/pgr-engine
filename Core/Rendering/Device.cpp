@@ -9,7 +9,7 @@
 
 using namespace pgr::Core::Rendering;
 
-Device::Device(PhysDevice device) {
+Device::Device(PhysDevice device) : mDeviceAllocator(device.DeviceHandle) {
   
     assert(device.IsComplete());
     float queuePriority = 1.0f;

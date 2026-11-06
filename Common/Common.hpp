@@ -4,7 +4,6 @@
 #include "Exceptions.hpp"        // IWYU pragma: keep
 #include "SystemMacros.hpp"      // IWYU pragma: keep
 
-
 #define PGR_NORETURN    [[noreturn]]
 #define PGR_NODISCARD   [[nodiscard]]
 
@@ -22,12 +21,4 @@ namespace pgr::Common {
             const uint16_t Patch;
         } Version;
     } EngineInfo { "PgrEngine", { 1, 0, 0 }};
-
-    class Component {
-        public: 
-            Component() = default;
-            ~Component() = default;
-            
-            virtual bool IsValid() const noexcept { return false; }
-    };
 }

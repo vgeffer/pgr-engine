@@ -10,8 +10,8 @@ namespace pgr::App {
         
         enum class FlagBits : uint64_t {
 
-            ManualDeviceSelect = 0,
-            UseValidations = 1,
+            ManualDeviceSelect = 1 << 0,
+            UseValidations = 1 << 1,
         };
 
         struct {
@@ -41,7 +41,7 @@ namespace pgr::App {
         
         PGRAPI PGR_NODISCARD AppManifest& SetName(const char* name) { std::strncpy(Name, name, 31); Name[31] = '\0'; return  *this; }
         PGRAPI PGR_NODISCARD AppManifest& SetAppRoot(const char* path) { std::strncpy(AppRoot, path, 255); AppRoot[255] = '\0'; return *this; }
-        PGRAPI PGR_NODISCARD AppManifest FromFile(const char* fileName) { return {}; }
+        PGRAPI PGR_NODISCARD AppManifest& FromFile(const char* fileName) { return *this; }
 
     };
 }

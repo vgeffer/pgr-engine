@@ -5,7 +5,7 @@
 #pragma once
 
 #include "Common/Common.hpp"
-#include "asset.hpp"
+#include "Core/Assets/asset.hpp"
 #include "vulkan/vulkan.hpp"
 
 namespace pgr::Core::Assets {

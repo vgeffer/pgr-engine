@@ -51,7 +51,7 @@ Application::Application(const AppManifest& manifest) {
             .setApplicationVersion(VK_MAKE_VERSION(mManifest->Version.Major, mManifest->Version.Minor, mManifest->Version.Patch))
             .setPEngineName(Common::EngineInfo.Name)
             .setEngineVersion(VK_MAKE_VERSION(Common::EngineInfo.Version.Major, Common::EngineInfo.Version.Minor, Common::EngineInfo.Version.Patch))
-            .setApiVersion(VK_API_VERSION_1_1);
+            .setApiVersion(VK_API_VERSION_1_4);
            
         vk::InstanceCreateInfo instanceInfo = vk::InstanceCreateInfo()
             .setPApplicationInfo(&appInfo)
@@ -83,7 +83,10 @@ Application::~Application() {
 
 Application::Status Application::Start() {
 
-    Application::Status ret = OK;
+    
+    Application::Status ret = eOk;
+
+
 
     Core::Presentation::VideoMode mode = Core::Presentation::VideoMode();
     Core::Presentation::Window window = Core::Presentation::Window(mVkInstance, "Title", mode);
@@ -101,7 +104,7 @@ Application::Status Application::Start() {
         std::cout << "\nAvailable devices:\n";
 
         for (int i = 0; i < devices.size(); i++)
-            std::cout << "[" << i + 1 << "] " << devices[i].vkPhysDevice.getProperties().deviceName << "\n";
+            std::cout << "[" << i + 1 << "] " << devices[i].DeviceHandle.getProperties().deviceName << "\n";
         std::cout << "\nSelect Device >> " << std::flush;
         
         int devID = -1;
@@ -155,10 +158,11 @@ Application::Status Application::Start() {
             /* if new window is not compatible with the old device, notify the app and issue APP_RELOAD */
 
             if (mUsedDevice.SupportsPresentation(window)) { /* destroy old window */ continue; }
-            ret = APP_RELOAD;
+            ret = eAppReload;
         }
-        catch (Common::Exceptions::AppReloadMesage)     { ret = APP_RELOAD; /* Go through usual cleanup */ }
-        catch (std::exception e)                        { /*debug::error << e.what() << std::endl; */ ret = ERROR; }
+        catch (Common::Exceptions::AppReloadMesage)     { ret = eAppReload; /* Go through usual cleanup */ }
+        catch (const std::runtime_error& e)             { /*debug::error << e.what() << std::endl; */ ret = eError; }
+        /* Do not catch std::logic_errors, those should crash the app directly */
 
         /* Cleanup */
         mUsedDevice.WaitToFinish();     // Wait until rendering is done - device should not be busy but just to be safe

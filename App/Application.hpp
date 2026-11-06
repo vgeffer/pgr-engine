@@ -24,7 +24,7 @@ namespace pgr::App {
     class Application {
 
         public:
-            enum Status { APP_RELOAD = -1, OK, ERROR };
+            enum Status { eAppReload = -1, eOk, eError };
 
         public:
             PGRAPI Application(const AppManifest& manifest);

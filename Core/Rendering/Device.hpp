@@ -20,8 +20,6 @@ namespace pgr::Core::Rendering {
     class Device final {
 
         public:
-        
-
             Device() = default;
 
             static std::vector<PhysDevice> EnumerateAvailable(const vk::Instance& instance, const Presentation::Window& window); 

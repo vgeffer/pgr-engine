@@ -2,6 +2,7 @@
 #include "App/Application.hpp"
 #include "Core/Assets/ShaderModule.hpp"
 #include "Core/Presentation/SwapChain.hpp"
+#include "Core/Rendering/VertexFormat.hpp"
 #include "vulkan/vulkan.hpp"
 #include <Core/Presentation/Window.hpp>
 #include <vector>
@@ -29,9 +30,17 @@ Renderer::Renderer(const Presentation::Window& target) : mSwapChain(target) {
         .setPName("main");
 
     /* TODO: PVP */
-    vk::PipelineVertexInputStateCreateInfo vertexInputInfo = vk::PipelineVertexInputStateCreateInfo()
-        .setVertexAttributeDescriptionCount(0)
-        .setVertexBindingDescriptionCount(0);
+    VertexFormat vertexFormat = VertexFormat()
+        .AddBuffer(VertexFormat::InputRate::ePerVertex)
+            .AddInput(VertexFormat::InputSize::eVec2f, "pos")
+            .AddInput(VertexFormat::InputSize::eVec3f, "color");
+
+    //const auto descriptors = vertexFormat.MakeBindingDescriptions();
+    //const auto attributes = vertexFormat.MakeVertexAttributes();
+    
+    vk::PipelineVertexInputStateCreateInfo vertexInputInfo = vk::PipelineVertexInputStateCreateInfo();
+      //  .setVertexBindingDescriptions(descriptors)
+        //.setVertexAttributeDescriptions(attributes);
 
     /* Why the fuck vulkan? */
     vk::PipelineInputAssemblyStateCreateInfo inputAssembly = vk::PipelineInputAssemblyStateCreateInfo()
@@ -137,6 +146,7 @@ Renderer::Renderer(const Presentation::Window& target) : mSwapChain(target) {
 
     const auto& pipelines = static_cast<vk::Device>(::App::UsedDevice()).createGraphicsPipeline(nullptr, pipelineInfo);
     mPipeline = pipelines.value;
+
 
     /* Framebuffers */
     for (const auto& image : mSwapChain.SwapChainImages()) {
